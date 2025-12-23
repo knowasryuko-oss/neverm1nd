@@ -1,5 +1,6 @@
 -- =========================================================
--- ATOMIC-STYLE BLATANT AUTO FISHING (MIRIP SEPERTI ATOMIC)
+-- BLATANT AUTO FISHING ala ATOMIC
+-- HANYA: RF/UpdateAutoFishingState + RE/FishingCompleted SPAM
 -- =========================================================
 
 -----------------------
@@ -23,25 +24,21 @@ local net = ReplicatedStorage
     :WaitForChild("net")
 
 local Events = {
-    charge        = net:WaitForChild("RF/ChargeFishingRod"),
-    minigame      = net:WaitForChild("RF/RequestFishingMinigameStarted"),
-    finish        = net:WaitForChild("RE/FishingCompleted"),
-    equip         = net:WaitForChild("RE/EquipToolFromHotbar"),
-    textEffect    = net:WaitForChild("RE/ReplicateTextEffect"),
-    cancelInputs  = net:WaitForChild("RF/CancelFishingInputs"),
-    updateAuto    = net:WaitForChild("RF/UpdateAutoFishingState"),
+    updateAuto = net:WaitForChild("RF/UpdateAutoFishingState"),
+    finish     = net:WaitForChild("RE/FishingCompleted"),
+    textEffect = net:WaitForChild("RE/ReplicateTextEffect"), -- kalau mau pakai '!' sebagai trigger
 }
 
 -----------------------
 -- CONFIG
 -----------------------
 local Config = {
-    AutoFish       = false,   -- auto lempar + mulai minigame
-    AutoCatch      = true,    -- auto tarik saat '!'
-    PerfectCast    = true,    -- posisi minigame mendekati perfect
-    FishDelay      = 0.55,    -- jeda antar cast (detik)
-    CatchDelay     = 0.001,   -- jeda setelah '!' sebelum FishingCompleted
-    HideMinigameUI = true,    -- sembunyikan bar hijau "Klik Cepat!"
+    BlatantAuto = false,   -- master toggle gaya Atomic
+    UseExclaim  = false,   -- kalau true: cuma spam saat ada tanda '!'
+    BurstCount  = 3,       -- berapa kali FishingCompleted per burst (Atomic kelihatan x3)
+    BurstDelay  = 0.03,    -- jeda antar FishingCompleted di dalam 1 burst
+    CycleDelay  = 0.10,    -- jeda antar burst kalau TIDAK pakai '!'
+    HideMinigameUI = true, -- sembunyikan bar tap-tap di layar (client-only)
 }
 
 -----------------------
@@ -53,149 +50,115 @@ LocalPlayer.Idled:Connect(function()
 end)
 
 -----------------------
--- DELAY HELPERS
+-- HIDE MINIGAME UI (CLIENT-SIDE)
 -----------------------
-local function getFishDelay()
-    local d = tonumber(Config.FishDelay) or 0.55
-    if d < 0.05 then d = 0.05 end
-    if d > 10   then d = 10   end
-    return d
-end
-
-local function getCatchDelay()
-    local d = tonumber(Config.CatchDelay) or 0.001
-    if d < 0.001 then d = 0.001 end
-    if d > 3     then d = 3     end
-    return d
-end
-
------------------------
--- HIDE MINIGAME GUI (CLIENT-SIDE)
------------------------
-local function hideIfFishingGui(inst)
+local function scanAndHideMinigameGui()
     if not Config.HideMinigameUI then return end
-    if not (inst:IsA("TextLabel") or inst:IsA("TextButton")) then return end
 
-    local txt = tostring(inst.Text or "")
-    if txt == "" then return end
+    local roots = {}
+    table.insert(roots, CoreGui)
 
-    -- match berbagai teks yang muncul di minigame
-    if txt:find("Klik Cepat!") or txt:find("Click Fast") or txt:find("Klik untuk Lempar") then
-        local frame = inst:FindFirstAncestorOfClass("Frame")
-        if frame then frame.Visible = false end
-        local sg = inst:FindFirstAncestorOfClass("ScreenGui")
-        if sg then sg.Enabled = false end
-    end
-end
-
-local function setupHideMinigame()
-    local function hook(root)
-        if not root then return end
-        for _, inst in ipairs(root:GetDescendants()) do
-            hideIfFishingGui(inst)
-        end
-        root.DescendantAdded:Connect(hideIfFishingGui)
-    end
-
-    hook(CoreGui)
     local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-    if pg then hook(pg) end
-end
-
-setupHideMinigame()
-
------------------------
--- AUTO FISH LOOP (REMOTE MIRIP COBALT)
------------------------
-local AutoState = { running = false }
-
-local function StartAutoFish()
-    if AutoState.running then return end
-    AutoState.running = true
-
-    -- equip rod SEKALI di awal (mirip Atomic yang tidak spam equip di loop)
-    pcall(function()
-        Events.equip:FireServer(1)
-    end)
+    if pg then table.insert(roots, pg) end
 
     pcall(function()
-        Events.updateAuto:InvokeServer(true)
-    end)
-
-    task.spawn(function()
-        while AutoState.running do
-            pcall(function()
-                -- Cancel state mancing sebelumnya
-                pcall(function()
-                    Events.cancelInputs:InvokeServer()
-                end)
-
-                -- ChargeFishingRod ala Cobalt:
-                -- Event:InvokeServer(nil, nil, nil, 1766496148.4334)
-                local tsCharge = workspace:GetServerTimeNow()
-                Events.charge:InvokeServer(nil, nil, nil, tsCharge)
-
-                task.wait(0.03) -- jeda kecil seperti "hold"
-
-                -- Start minigame
-                local x, y
-                if Config.PerfectCast then
-                    -- base dari script lamamu / Atomic-style
-                    local baseX, baseY = -0.7499996423721313, 1
-                    x = baseX + (math.random(-500,500)/1e7)
-                    y = baseY + (math.random(-500,500)/1e7)
-                else
-                    x = math.random(-1000,1000)/1000
-                    y = math.random(0,1000)/1000
-                end
-
-                local tsMini = workspace:GetServerTimeNow()
-                -- persis pola Cobalt: x, y, serverTime
-                Events.minigame:InvokeServer(x, y, tsMini)
-
-                -- Tunggu sebelum cast berikutnya
-                task.wait(getFishDelay())
-            end)
-
-            task.wait(0.01)
+        if typeof(gethui) == "function" then
+            local hui = gethui()
+            if typeof(hui) == "Instance" then
+                table.insert(roots, hui)
+            end
         end
     end)
+
+    for _, root in ipairs(roots) do
+        for _, inst in ipairs(root:GetDescendants()) do
+            if inst:IsA("TextLabel") or inst:IsA("TextButton") then
+                local txt = tostring(inst.Text or "")
+                if txt ~= "" and (
+                    txt:find("Klik Cepat") or
+                    txt:find("Click Fast") or
+                    txt:find("Klik untuk Lempar")
+                ) then
+                    local frame = inst:FindFirstAncestorOfClass("Frame")
+                    if frame then frame.Visible = false end
+                    local sg = inst:FindFirstAncestorOfClass("ScreenGui")
+                    if sg then sg.Enabled = false end
+                end
+            end
+        end
+    end
 end
 
-local function StopAutoFish()
-    AutoState.running = false
+-- loop ringan supaya minigame bar selalu ketutup
+task.spawn(function()
+    while true do
+        pcall(scanAndHideMinigameGui)
+        task.wait(0.1)
+    end
+end)
 
-    pcall(function()
-        Events.updateAuto:InvokeServer(false)
-    end)
+-----------------------
+-- BLATANT AUTO FISH CORE
+-----------------------
+local BlatantState = {
+    running = false,
+}
 
-    pcall(function()
-        Events.cancelInputs:InvokeServer()
-    end)
+-- burst x3 FishingCompleted seperti pola Atomic
+local function doBurst()
+    for i = 1, Config.BurstCount do
+        pcall(function()
+            Events.finish:FireServer()
+        end)
+        task.wait(Config.BurstDelay)
+    end
 end
 
------------------------
--- SUPER INSTANT AUTO CATCH (NUNGGU '!')
------------------------
+-- MODE 1: SPAM BERKALA (TANPA LIHAT '!')
+local function spamLoopNoExclaim()
+    while BlatantState.running and not Config.UseExclaim do
+        doBurst()
+        task.wait(Config.CycleDelay)
+    end
+end
+
+-- MODE 2: HANYA SAAT ADA TANDA '!' (lebih aman)
 Events.textEffect.OnClientEvent:Connect(function(data)
-    if not Config.AutoCatch then return end
+    if not BlatantState.running then return end
+    if not Config.UseExclaim then return end
     if not data or not data.TextData then return end
-    if data.TextData.EffectType ~= "Exclaim" then return end  -- tanda '!'
+    if data.TextData.EffectType ~= "Exclaim" then return end -- tanda '!'
 
     local char = LocalPlayer.Character
     if not char then return end
     local head = char:FindFirstChild("Head")
     if not head or data.Container ~= head then return end
 
-    local delay = getCatchDelay()
-    task.spawn(function()
-        task.wait(delay)
-        -- Cobalt: RE/FishingCompleted:FireServer() tanpa argumen
-        pcall(function()
-            Events.finish:FireServer()
-        end)
-    end)
+    task.spawn(doBurst)
 end)
+
+local function StartBlatant()
+    if BlatantState.running then return end
+    BlatantState.running = true
+
+    -- Aktifkan auto fishing di server (persis seperti Cobalt: invokeServer(true))
+    pcall(function()
+        Events.updateAuto:InvokeServer(true)
+    end)
+
+    -- Kalau tidak pakai trigger '!' → spam terus
+    if not Config.UseExclaim then
+        task.spawn(spamLoopNoExclaim)
+    end
+end
+
+local function StopBlatant()
+    BlatantState.running = false
+
+    pcall(function()
+        Events.updateAuto:InvokeServer(false)
+    end)
+end
 
 -- =========================================================
 -- WINDUI WINDOW
@@ -206,8 +169,8 @@ local Window = WindUI:CreateWindow({
     Title  = "V2 (Atomic-Style)",
     Icon   = "fish",
     Author = "by YOU",
-    Folder = "AtomicLikeAutoFish",
-    Size   = UDim2.fromOffset(500, 340),
+    Folder = "AtomicBlatant",
+    Size   = UDim2.fromOffset(500, 320),
     Theme  = "Indigo",
     KeySystem = false
 })
@@ -215,13 +178,13 @@ local Window = WindUI:CreateWindow({
 WindUI:SetNotificationLower(true)
 WindUI:Notify({
     Title   = "Loaded",
-    Content = "Atomic-style Auto Fishing siap.",
+    Content = "Blatant Auto Fishing ala Atomic siap.",
     Duration= 5,
     Icon    = "circle-check"
 })
 
 -----------------------
--- FIND MAIN UI UNTUK TOGGLE FLOATING BUTTON
+-- FIND MAIN UI FOR FLOATING BUTTON
 -----------------------
 local mainGui
 local mainRootFrame
@@ -293,77 +256,86 @@ local MainTab = Window:Tab({
 })
 
 local AutoSection = MainTab:Section({
-    Title = "Atomic-Style Auto Fishing",
+    Title = "Blatant Auto Fishing (Atomic-like)",
     Icon  = "fish"
 })
 
 AutoSection:Toggle({
-    Title   = "Auto Fishing (Blatant)",
-    Content = "Lempar + mulai minigame otomatis (charge & minigame sama seperti Atomic).",
-    Value   = Config.AutoFish,
+    Title   = "Blatant Auto Fishing",
+    Content = "ON: RF/UpdateAutoFishingState(true) + spam RE/FishingCompleted.\nOFF: UpdateAutoFishingState(false).",
+    Value   = Config.BlatantAuto,
     Callback = function(v)
-        Config.AutoFish = v
+        Config.BlatantAuto = v
         if v then
-            StartAutoFish()
+            StartBlatant()
         else
-            StopAutoFish()
+            StopBlatant()
         end
-        print("[AutoFish] =", v)
+        print("[BlatantAuto] =", v)
     end
 })
 
 AutoSection:Toggle({
-    Title   = "Super Instant Auto Catch ('!')",
-    Content = "Tarik ikan segera setelah tanda '!' dari server.",
-    Value   = Config.AutoCatch,
+    Title   = "Gunakan tanda '!' sebagai trigger",
+    Content = "ON: burst FishingCompleted hanya saat efek '!' muncul (lebih aman).\nOFF: spam terus dengan interval CycleDelay (lebih mirip Atomic murni).",
+    Value   = Config.UseExclaim,
     Callback = function(v)
-        Config.AutoCatch = v
-        print("[AutoCatch] =", v)
-    end
-})
-
-AutoSection:Toggle({
-    Title   = "Perfect Cast",
-    Content = "ON = posisi minigame mendekati perfect; OFF = random.",
-    Value   = Config.PerfectCast,
-    Callback = function(v)
-        Config.PerfectCast = v
-    end
-})
-
-AutoSection:Input({
-    Title       = "Slow Reel Threshold (detik)",
-    Content     = "Jeda antar cast. Kecilkan (0.2 / 0.1) untuk efek banyak notif seperti Atomic.",
-    Placeholder = tostring(Config.FishDelay),
-    Callback    = function(v)
-        local n = tonumber(v)
-        if n and n >= 0.05 and n <= 10 then
-            Config.FishDelay = n
-            print("[Config] FishDelay =", n)
-        else
-            warn("[Config] Invalid FishDelay (0.05-10)")
+        Config.UseExclaim = v
+        -- kalau diubah ke OFF saat sedang jalan → mulai loop spam
+        if BlatantState.running and not v then
+            task.spawn(spamLoopNoExclaim)
         end
     end
 })
 
 AutoSection:Input({
-    Title       = "Super Instant Delay (detik)",
-    Content     = "Delay setelah '!' sebelum FishingCompleted. Contoh 0.001 - 0.02.",
-    Placeholder = tostring(Config.CatchDelay),
+    Title       = "Burst Count (xFishingCompleted)",
+    Content     = "Berapa kali FishingCompleted per burst. Atomic kelihatan pakai 3.",
+    Placeholder = tostring(Config.BurstCount),
     Callback    = function(v)
         local n = tonumber(v)
-        if n and n >= 0.001 and n <= 3 then
-            Config.CatchDelay = n
-            print("[Config] CatchDelay =", n)
+        if n and n >= 1 and n <= 10 then
+            Config.BurstCount = math.floor(n)
+            print("[Config] BurstCount =", Config.BurstCount)
         else
-            warn("[Config] Invalid CatchDelay (0.001-3)")
+            warn("[Config] Invalid BurstCount (1-10)")
+        end
+    end
+})
+
+AutoSection:Input({
+    Title       = "Burst Delay (detik)",
+    Content     = "Jeda antar FishingCompleted di dalam 1 burst (0.0 - 0.2).",
+    Placeholder = tostring(Config.BurstDelay),
+    Callback    = function(v)
+        local n = tonumber(v)
+        if n and n >= 0 and n <= 0.2 then
+            Config.BurstDelay = n
+            print("[Config] BurstDelay =", n)
+        else
+            warn("[Config] Invalid BurstDelay (0 - 0.2)")
+        end
+    end
+})
+
+AutoSection:Input({
+    Title       = "Cycle Delay (detik)",
+    Content     = "Jeda antar burst kalau UseExclaim = OFF. 0.05 - 1.0",
+    Placeholder = tostring(Config.CycleDelay),
+    Callback    = function(v)
+        local n = tonumber(v)
+        if n and n >= 0.05 and n <= 1 then
+            Config.CycleDelay = n
+            print("[Config] CycleDelay =", n)
+        else
+            warn("[Config] Invalid CycleDelay (0.05-1)")
         end
     end
 })
 
 AutoSection:Toggle({
     Title   = "Hide Minigame UI",
-    Content = "Sembunyikan bar hijau 'Klik Cepat!' di layar (client-side).",
+    Content = "Sembunyikan bar 'Klik Cepat!' di layar (client-only).",
     Value   = Config.HideMinigameUI,
     Callback = function(v)
         Config.HideMinigameUI = v
@@ -428,7 +400,6 @@ local function createNeverm1ndGui(parent)
     local ImageCorner = Instance.new("UICorner", ImageLabel6)
     ImageCorner.CornerRadius = UDim.new(0, 13)
 
-    -- Drag
     local dragging = false
     local dragStart
     local startPos
@@ -544,4 +515,4 @@ toggleButton.MouseButton1Click:Connect(function()
     setMainVisible(not uiVisible)
 end)
 
-print("[AtomicStyle-Final] Script loaded.")
+print("[AtomicBlatant] Script loaded.")
