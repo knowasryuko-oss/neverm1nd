@@ -1,8 +1,5 @@
 -- =========================================================
--- BLATANT AUTO FISHING • MIRIP ATOMIC (2 REMOTE SAJA)
--- Remote Outgoing dari script ini:
---   RF/UpdateAutoFishingState (x1 ON, x1 OFF)
---   RE/FishingCompleted (burst x3 berkali-kali)
+-- AUTO FISHING MODE • SUPER INSTANT (REBUILD ala ATOMIC)
 -- =========================================================
 
 -----------------------
@@ -25,21 +22,31 @@ local net = ReplicatedStorage
     :WaitForChild("sleitnick_net@0.2.0")
     :WaitForChild("net")
 
-local RF_UpdateAutoFishingState = net:WaitForChild("RF/UpdateAutoFishingState")
-local RE_FishingCompleted       = net:WaitForChild("RE/FishingCompleted")
-local RE_ReplicateTextEffect    = net:WaitForChild("RE/ReplicateTextEffect") -- incoming, tidak ke server
+local Events = {
+    cancelInputs   = net:WaitForChild("RF/CancelFishingInputs"),
+    charge         = net:WaitForChild("RF/ChargeFishingRod"),
+    minigame       = net:WaitForChild("RF/RequestFishingMinigameStarted"),
+    finish         = net:WaitForChild("RE/FishingCompleted"),
+    textEffect     = net:WaitForChild("RE/ReplicateTextEffect"),
+    updateAuto     = net:WaitForChild("RF/UpdateAutoFishingState"),
+
+    equipHotbar    = net:WaitForChild("RE/EquipToolFromHotbar"),
+    unequipOxy     = net:WaitForChild("RF/UnequipOxygenTank"),
+    updateRadar    = net:WaitForChild("RF/UpdateFishingRadar"),
+}
 
 -----------------------
 -- CONFIG
 -----------------------
 local Config = {
-    AutoFishing    = false, -- toggle utama
-    SlowReel       = 1.7,   -- dipakai untuk throttle antar burst (mirip "Slow Reel Threshold")
-    SuperInstant   = 1.0,   -- delay setelah '!' sebelum burst FishingCompleted
-    RandomizeDelay = false, -- acak sedikit SlowReel & SuperInstant
-    BurstCount     = 3,     -- berapa kali FishingCompleted per burst (Atomic terlihat x3)
-    BurstGap       = 0.03,  -- jeda antar FishingCompleted di dalam burst
-    HideMinigameUI = true,  -- sembunyikan bar hijau tap-tap
+    AutoFishing      = false, -- toggle utama
+    RandomizeResults = false, -- ON: posisi minigame acak; OFF: dekat perfect
+    SlowReel         = 1.7,   -- "Slow Reel Threshold" (detik)
+    SuperInstant     = 1.0,   -- "Super Instant Delay" (detik)
+    RandomizeDelay   = false, -- acak sedikit SlowReel & SuperInstant (±30%)
+    BurstCount       = 3,     -- FishingCompleted per '!'-event
+    BurstGap         = 0.03,  -- jeda antar FishingCompleted di burst
+    HideMinigameUI   = true,  -- sembunyikan bar tap-tap (client-only)
 }
 
 -----------------------
@@ -55,13 +62,13 @@ end)
 -----------------------
 local function getSlowReel()
     local base = tonumber(Config.SlowReel) or 1.7
-    if base < 0.05 then base = 0.05 end
-    if base > 10   then base = 10   end
+    if base < 0.1 then base = 0.1 end
+    if base > 10  then base = 10  end
 
     if Config.RandomizeDelay then
-        local delta = base * 0.3
+        local delta = base * 0.3  -- ±30%
         base = base + (math.random() * 2 - 1) * delta
-        if base < 0.05 then base = 0.05 end
+        if base < 0.1 then base = 0.1 end
     end
     return base
 end
@@ -82,135 +89,151 @@ end
 -----------------------
 -- HIDE MINIGAME UI (CLIENT-SIDE)
 -----------------------
-local function scanAndHideMinigameGui()
+local function hideOne(inst)
     if not Config.HideMinigameUI then return end
+    if not (inst:IsA("TextLabel") or inst:IsA("TextButton")) then return end
 
-    local roots = {}
-    table.insert(roots, CoreGui)
+    local txt = tostring(inst.Text or "")
+    if txt == "" then return end
 
-    local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-    if pg then table.insert(roots, pg) end
+    if txt:find("Klik Cepat") or txt:find("Click Fast") or txt:find("Klik untuk Lempar") then
+        local frame = inst:FindFirstAncestorOfClass("Frame")
+        if frame then frame.Visible = false end
+        local sg = inst:FindFirstAncestorOfClass("ScreenGui")
+        if sg then sg.Enabled = false end
+    end
+end
 
-    pcall(function()
-        if typeof(gethui) == "function" then
-            local hui = gethui()
-            if typeof(hui) == "Instance" then
-                table.insert(roots, hui)
-            end
+local function setupHideMinigame()
+    local function hookRoot(root)
+        if not root then return end
+        for _, inst in ipairs(root:GetDescendants()) do
+            hideOne(inst)
         end
+        root.DescendantAdded:Connect(hideOne)
+    end
+
+    hookRoot(CoreGui)
+    local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if pg then hookRoot(pg) end
+end
+
+setupHideMinigame()
+
+-----------------------
+-- INIT ala Atomic (sekali saat script load)
+-----------------------
+task.spawn(function()
+    -- Equip rod di hotbar slot 1
+    pcall(function()
+        Events.equipHotbar:FireServer(1)
     end)
 
-    for _, root in ipairs(roots) do
-        for _, inst in ipairs(root:GetDescendants()) do
-            if inst:IsA("TextLabel") or inst:IsA("TextButton") then
-                local txt = tostring(inst.Text or "")
-                if txt ~= "" and (
-                    txt:find("Klik Cepat") or
-                    txt:find("Click Fast") or
-                    txt:find("Klik untuk Lempar")
-                ) then
-                    local frame = inst:FindFirstAncestorOfClass("Frame")
-                    if frame then frame.Visible = false end
-                    local sg = inst:FindFirstAncestorOfClass("ScreenGui")
-                    if sg then sg.Enabled = false end
+    -- Cancel input lama
+    pcall(function()
+        Events.cancelInputs:InvokeServer()
+    end)
+
+    -- Unequip oxygen tank (kalau ada)
+    pcall(function()
+        Events.unequipOxy:InvokeServer()
+    end)
+
+    -- Matikan radar fishing (opsional safety)
+    pcall(function()
+        Events.updateRadar:InvokeServer(false)
+    end)
+end)
+
+-----------------------
+-- AUTO FISHING LOOP (CANCEL → CHARGE x2 → MINIGAME → WAIT)
+-----------------------
+local Auto = { running = false }
+
+local function StartAutoFishing()
+    if Auto.running then return end
+    Auto.running = true
+
+    -- Flag auto di server (sekali saat ON)
+    pcall(function()
+        Events.updateAuto:InvokeServer(true)
+    end)
+
+    task.spawn(function()
+        while Auto.running do
+            pcall(function()
+                -- 1) CancelFishingInputs
+                pcall(function()
+                    Events.cancelInputs:InvokeServer()
+                end)
+
+                -- 2) ChargeFishingRod x2 (hold + release)
+                local t1 = workspace:GetServerTimeNow()
+                Events.charge:InvokeServer(nil, nil, nil, t1)
+                task.wait(0.25) -- durasi hold, tweak kalau perlu
+
+                local t2 = workspace:GetServerTimeNow()
+                Events.charge:InvokeServer(nil, nil, nil, t2)
+
+                -- 3) RequestFishingMinigameStarted
+                local x, y
+                if Config.RandomizeResults then
+                    x = math.random(-1000, 1000) / 1000
+                    y = math.random(0, 1000) / 1000
+                else
+                    local baseX, baseY = -0.7499996423721313, 1
+                    x = baseX + (math.random(-500, 500) / 1e7)
+                    y = baseY + (math.random(-500, 500) / 1e7)
                 end
-            end
+
+                local t3 = workspace:GetServerTimeNow()
+                Events.minigame:InvokeServer(x, y, t3)
+
+                -- 4) Tunggu SlowReel sebelum siklus baru
+                task.wait(getSlowReel())
+            end)
+
+            task.wait(0.02)
         end
-    end
+    end)
 end
 
-task.spawn(function()
-    while true do
-        pcall(scanAndHideMinigameGui)
-        task.wait(0.1)
-    end
-end)
+local function StopAutoFishing()
+    Auto.running = false
 
------------------------
--- HOOK METAMETHOD: BLOCK REMOTE AUTO FISHING GAME
------------------------
-local BlatantState = { running = false }
-local hookEnabled  = false
+    pcall(function()
+        Events.updateAuto:InvokeServer(false)
+    end)
 
-local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    local method = getnamecallmethod()
-    if hookEnabled
-        and method == "InvokeServer"
-        and typeof(self) == "Instance"
-        and self:IsA("RemoteFunction")
-    then
-        local name = self.Name
-        -- block remote bawaan auto fishing game
-        if name == "RF/ChargeFishingRod"
-        or name == "RF/RequestFishingMinigameStarted"
-        or name == "RF/CancelFishingInputs" then
-            -- jangan diteruskan ke server
-            return nil
-        end
-    end
-
-    return oldNamecall(self, ...)
-end)
-
------------------------
--- BLATANT CORE (HANYA 2 REMOTE KELUAR)
------------------------
-local lastBurstTime = 0
-
-local function doBurst()
-    lastBurstTime = os.clock()
-    for i = 1, (Config.BurstCount or 3) do
-        pcall(function()
-            RE_FishingCompleted:FireServer()
-        end)
-        task.wait(Config.BurstGap or 0.03)
-    end
+    pcall(function()
+        Events.cancelInputs:InvokeServer()
+    end)
 end
 
--- Selalu pakai tanda '!' sebagai trigger (tanpa opsi mode lain)
-RE_ReplicateTextEffect.OnClientEvent:Connect(function(data)
-    if not BlatantState.running then return end
+-----------------------
+-- SUPER INSTANT AUTO CATCH (TRIGGER DARI '!')
+-----------------------
+Events.textEffect.OnClientEvent:Connect(function(data)
+    if not Config.AutoFishing then return end
     if not data or not data.TextData then return end
-    if data.TextData.EffectType ~= "Exclaim" then return end -- tanda '!'
+    if data.TextData.EffectType ~= "Exclaim" then return end  -- tanda '!'
 
     local char = LocalPlayer.Character
     if not char then return end
     local head = char:FindFirstChild("Head")
     if not head or data.Container ~= head then return end
 
-    -- throttle pakai SlowReel, supaya tidak nabrak kalau ada spam efek
-    local now = os.clock()
-    if now - lastBurstTime < getSlowReel() then
-        return
-    end
-
     local delay = getSuperInstant()
     task.spawn(function()
         task.wait(delay)
-        doBurst()
+        for i = 1, (Config.BurstCount or 3) do
+            pcall(function()
+                Events.finish:FireServer()
+            end)
+            task.wait(Config.BurstGap or 0.03)
+        end
     end)
 end)
-
-local function StartBlatant()
-    if BlatantState.running then return end
-    BlatantState.running = true
-    hookEnabled = true
-
-    -- persis Atomic: UpdateAutoFishingState(true) sekali
-    pcall(function()
-        RF_UpdateAutoFishingState:InvokeServer(true)
-    end)
-end
-
-local function StopBlatant()
-    BlatantState.running = false
-    hookEnabled = false
-
-    pcall(function()
-        RF_UpdateAutoFishingState:InvokeServer(false)
-    end)
-end
 
 -- =========================================================
 -- WINDUI WINDOW
@@ -218,11 +241,11 @@ end
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 local Window = WindUI:CreateWindow({
-    Title  = "Auto Fishing Mode • Blatant",
+    Title  = "Auto Fishing Mode • Super Instant",
     Icon   = "fish",
     Author = "by YOU",
-    Folder = "AtomicBlatantPure",
-    Size   = UDim2.fromOffset(500, 320),
+    Folder = "AtomicRebuild_Final",
+    Size   = UDim2.fromOffset(500, 340),
     Theme  = "Indigo",
     KeySystem = false
 })
@@ -230,7 +253,7 @@ local Window = WindUI:CreateWindow({
 WindUI:SetNotificationLower(true)
 WindUI:Notify({
     Title   = "Loaded",
-    Content = "Blatant Auto Fishing (2 remote, pakai tanda '!') siap.",
+    Content = "Rebuild Atomic-Style Auto Fishing siap.\nEquip pancing dulu manual.",
     Duration= 6,
     Icon    = "circle-check"
 })
@@ -260,7 +283,7 @@ local function findMainUi()
 
     for _, root in ipairs(roots) do
         for _, inst in ipairs(root:GetDescendants()) do
-            if inst:IsA("TextLabel") and tostring(inst.Text):find("Blatant") then
+            if inst:IsA("TextLabel") and tostring(inst.Text):find("Auto Fishing Mode") then
                 local sg = inst:FindFirstAncestorOfClass("ScreenGui")
                 if sg then
                     local frame = inst:FindFirstAncestorOfClass("Frame")
@@ -300,7 +323,7 @@ task.spawn(function()
 end)
 
 -----------------------
--- UI CONTENT (tanpa opsi mode)
+-- UI CONTENT
 -----------------------
 local MainTab = Window:Tab({
     Title = "Main",
@@ -314,37 +337,46 @@ local AutoSection = MainTab:Section({
 
 AutoSection:Toggle({
     Title   = "Auto Fishing",
-    Content = "ON: RF/UpdateAutoFishingState(true) + burst RE/FishingCompleted saat '!' muncul.\nOFF: RF/UpdateAutoFishingState(false).",
+    Content = "ON: Cancel + Charge x2 + RequestMinigame + Super Instant '!' finish.\nOFF: UpdateAutoFishingState(false).",
     Value   = Config.AutoFishing,
     Callback = function(v)
         Config.AutoFishing = v
         if v then
-            StartBlatant()
+            StartAutoFishing()
         else
-            StopBlatant()
+            StopAutoFishing()
         end
         print("[AutoFishing] =", v)
     end
 })
 
+AutoSection:Toggle({
+    Title   = "Randomize Results",
+    Content = "ON: posisi minigame acak; OFF: dekat perfect.",
+    Value   = Config.RandomizeResults,
+    Callback = function(v)
+        Config.RandomizeResults = v
+    end
+})
+
 AutoSection:Input({
     Title       = "Slow Reel Threshold (detik)",
-    Content     = "Throttle antar burst (0.05 - 10). Semakin kecil, semakin sering ikan.",
+    Content     = "Jeda antar cast (0.1 - 10).",
     Placeholder = tostring(Config.SlowReel),
     Callback    = function(v)
         local n = tonumber(v)
-        if n and n >= 0.05 and n <= 10 then
+        if n and n >= 0.1 and n <= 10 then
             Config.SlowReel = n
             print("[Config] SlowReel =", n)
         else
-            warn("[Config] Invalid SlowReel (0.05-10)")
+            warn("[Config] Invalid SlowReel (0.1-10)")
         end
     end
 })
 
 AutoSection:Input({
     Title       = "Super Instant Delay (detik)",
-    Content     = "Jeda setelah '!' sebelum burst FishingCompleted (0.001 - 10).",
+    Content     = "Jeda setelah tanda '!' sebelum FishingCompleted burst (0.001 - 10).",
     Placeholder = tostring(Config.SuperInstant),
     Callback    = function(v)
         local n = tonumber(v)
@@ -366,48 +398,18 @@ AutoSection:Toggle({
     end
 })
 
-AutoSection:Input({
-    Title       = "Burst Count",
-    Content     = "Jumlah RE/FishingCompleted per burst (1 - 10). Atomic biasanya 3.",
-    Placeholder = tostring(Config.BurstCount),
-    Callback    = function(v)
-        local n = tonumber(v)
-        if n and n >= 1 and n <= 10 then
-            Config.BurstCount = math.floor(n)
-            print("[Config] BurstCount =", Config.BurstCount)
-        else
-            warn("[Config] Invalid BurstCount (1-10)")
-        end
-    end
-})
-
-AutoSection:Input({
-    Title       = "Burst Gap (detik)",
-    Content     = "Jeda antar FishingCompleted di dalam burst (0 - 0.2).",
-    Placeholder = tostring(Config.BurstGap),
-    Callback    = function(v)
-        local n = tonumber(v)
-        if n and n >= 0 and n <= 0.2 then
-            Config.BurstGap = n
-            print("[Config] BurstGap =", Config.BurstGap)
-        else
-            warn("[Config] Invalid BurstGap (0-0.2)")
-        end
-    end
-})
-
 AutoSection:Toggle({
     Title   = "Hide Minigame UI",
-    Content = "Sembunyikan bar 'Klik Cepat!' di layar (visual saja).",
+    Content = "Sembunyikan bar 'Klik Cepat!' di layar (visual).",
     Value   = Config.HideMinigameUI,
     Callback = function(v)
         Config.HideMinigameUI = v
     end
 })
 
--- =========================================================
--- NEVERM1ND FLOATING BUTTON (sama seperti sebelumnya)
--- =========================================================
+-----------------------
+-- NEVERM1ND FLOATING BUTTON
+-----------------------
 local function createNeverm1ndGui(parent)
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "Neverm1nd"
@@ -463,6 +465,7 @@ local function createNeverm1ndGui(parent)
     local ImageCorner = Instance.new("UICorner", ImageLabel6)
     ImageCorner.CornerRadius = UDim.new(0, 13)
 
+    -- drag
     local dragging = false
     local dragStart
     local startPos
@@ -578,4 +581,4 @@ toggleButton.MouseButton1Click:Connect(function()
     setMainVisible(not uiVisible)
 end)
 
-print("[Blatant2Remote+Hook+ExclaimOnly] Script loaded.")
+print("[AtomicRebuild_Final] Script loaded.")
