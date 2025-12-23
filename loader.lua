@@ -176,3 +176,52 @@ AutoFishSection:Toggle({
     Callback = function(v)
         Config.AutoFish = v
         if v then
+            StartAutoFishV2()
+            print("[SuperInstant] ON")
+        else
+            StopAutoFishV2()
+            print("[SuperInstant] OFF")
+        end
+    end
+})
+
+AutoFishSection:Toggle({
+    Title   = "Perfect Cast",
+    Content = "ON = cast mendekati perfect; OFF = random.",
+    Value   = Config.PerfectCast,
+    Callback = function(v)
+        Config.PerfectCast = v
+    end
+})
+
+AutoFishSection:Input({
+    Title       = "Slow Reel Threshold (detik)",
+    Content     = "Jeda tunggu setelah lempar. Isi bebas (0.1 - 10).",
+    Placeholder = tostring(Config.FishDelay),
+    Callback    = function(v)
+        local n = tonumber(v)
+        if n and n >= 0.1 and n <= 10 then
+            Config.FishDelay = n
+            print("[Config] SlowReel =", n)
+        else
+            warn("[Config] Invalid SlowReel (0.1-10)")
+        end
+    end
+})
+
+AutoFishSection:Input({
+    Title       = "Super Instant Delay (detik)",
+    Content     = "Jeda setelah tanda '!' sebelum reel. Isi bebas (0.05 - 10).",
+    Placeholder = tostring(Config.CatchDelay),
+    Callback    = function(v)
+        local n = tonumber(v)
+        if n and n >= 0.05 and n <= 10 then
+            Config.CatchDelay = n
+            print("[Config] SuperInstantDelay =", n)
+        else
+            warn("[Config] Invalid SuperInstantDelay (0.05-10)")
+        end
+    end
+})
+
+print("[SuperInstant] Script loaded.")
