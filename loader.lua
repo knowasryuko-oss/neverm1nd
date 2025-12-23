@@ -1,10 +1,10 @@
 -- ====================================================================
---                 AUTO FISH V4.0 - WINDUI EDITION (FIX CAST)
+--  AUTO FISH V4.0 - WINDUI + AUTO FISH V2 (SUPER INSTANT 1 TOGGLE)
 -- ====================================================================
 
 -- ====== CRITICAL DEPENDENCY VALIDATION ======
-local success, errorMsg = pcall(function()
-    local services = {
+local ok, err = pcall(function()
+    local s = {
         game = game,
         workspace = workspace,
         Players = game:GetService("Players"),
@@ -12,23 +12,16 @@ local success, errorMsg = pcall(function()
         ReplicatedStorage = game:GetService("ReplicatedStorage"),
         HttpService = game:GetService("HttpService")
     }
-    
-    for serviceName, service in pairs(services) do
-        if not service then
-            error("Critical service missing: " .. serviceName)
-        end
+    for name, svc in pairs(s) do
+        if not svc then error("Missing service: "..name) end
     end
-    
-    local LocalPlayer = game:GetService("Players").LocalPlayer
-    if not LocalPlayer then
+    if not game:GetService("Players").LocalPlayer then
         error("LocalPlayer not available")
     end
-    
-    return true
 end)
 
-if not success then
-    error("❌ [Auto Fish] Critical dependency check failed: " .. tostring(errorMsg))
+if not ok then
+    error("❌ [Auto Fish] Critical dependency check failed: " .. tostring(err))
     return
 end
 
@@ -42,8 +35,7 @@ local HttpService       = game:GetService("HttpService")
 local VirtualUser       = game:GetService("VirtualUser")
 local LocalPlayer       = Players.LocalPlayer
 
--- RbxNet package
-local NetPackage = ReplicatedStorage
+local net = ReplicatedStorage
     :WaitForChild("Packages")
     :WaitForChild("_Index")
     :WaitForChild("sleitnick_net@0.2.0")
@@ -56,13 +48,16 @@ local CONFIG_FOLDER = "OptimizedAutoFish"
 local CONFIG_FILE   = CONFIG_FOLDER .. "/config_" .. LocalPlayer.UserId .. ".json"
 
 local DefaultConfig = {
-    AutoFish         = false,
+    -- AUTO FISH V2
+    AutoFish    = false,  -- dipakai juga sebagai SuperInstant toggle
+    AutoCatch   = false,  -- akan otomatis ikut AutoFish
+    PerfectCast = true,
+    FishDelay   = 1.5,    -- Slow Reel Threshold (detik) - bebas kamu atur
+    CatchDelay  = 1.0,    -- Super Instant Delay (detik) - bebas kamu atur
+
+    -- FITUR LAIN
     AutoSell         = false,
-    AutoCatch        = false,
     GPUSaver         = false,
-    BlatantMode      = false,
-    FishDelay        = 1.9, -- Slow Reel Threshold default
-    CatchDelay       = 1.0, -- Super Instant Delay default
     SellDelay        = 30,
     TeleportLocation = "Sisyphus Statue",
     AutoFavorite     = true,
@@ -70,26 +65,26 @@ local DefaultConfig = {
 }
 
 local Config = {}
-for k, v in pairs(DefaultConfig) do Config[k] = v end
+for k,v in pairs(DefaultConfig) do Config[k] = v end
 
 -- ====================================================================
 --                    TELEPORT LOCATIONS
 -- ====================================================================
 local LOCATIONS = {
-    ["Spawn"] = CFrame.new(45.2788086, 252.562927, 2987.10913, 1, 0, 0, 0, 1, 0, 0, 0, 1),
-    ["Sisyphus Statue"] = CFrame.new(-3728.21606, -135.074417, -1012.12744, -0.977224171, 7.74980258e-09, -0.212209702, 1.566994e-08, 1, -3.5640408e-08, 0.212209702, -3.81539813e-08, -0.977224171),
-    ["Coral Reefs"] = CFrame.new(-3114.78198, 1.32066584, 2237.52295, -0.304758579, 1.6556676e-08, -0.952429652, -8.50574935e-08, 1, 4.46003305e-08, 0.952429652, 9.46036067e-08, -0.304758579),
-    ["Esoteric Depths"] = CFrame.new(3248.37109, -1301.53027, 1403.82727, -0.920208454, 7.76270355e-08, 0.391428679, 4.56261056e-08, 1, -9.10549289e-08, -0.391428679, -6.5930152e-08, -0.920208454),
-    ["Crater Island"] = CFrame.new(1016.49072, 20.0919304, 5069.27295, 0.838976264, 3.30379857e-09, -0.544168055, 2.63538391e-09, 1, 1.01344115e-08, 0.544168055, -9.93662219e-09, 0.838976264),
-    ["Lost Isle"] = CFrame.new(-3618.15698, 240.836655, -1317.45801, 1, 0, 0, 0, 1, 0, 0, 0, 1),
-    ["Weather Machine"] = CFrame.new(-1488.51196, 83.1732635, 1876.30298, 1, 0, 0, 0, 1, 0, 0, 0, 1),
-    ["Tropical Grove"] = CFrame.new(-2095.34106, 197.199997, 3718.08008),
-    ["Mount Hallow"] = CFrame.new(2136.62305, 78.9163895, 3272.50439, -0.977613986, -1.77645827e-08, 0.210406482, -2.42338203e-08, 1, -2.81680421e-08, -0.210406482, -3.26364251e-08, -0.977613986),
-    ["Treasure Room"] = CFrame.new(-3606.34985, -266.57373, -1580.97339, 0.998743415, 1.12141152e-13, -0.0501160324, -1.56847693e-13, 1, -8.88127842e-13, 0.0501160324, 8.94872392e-13, 0.998743415),
-    ["Kohana"] = CFrame.new(-663.904236, 3.04580712, 718.796875, -0.100799225, -2.14183729e-08, -0.994906783, -1.12300391e-08, 1, -2.03902459e-08, 0.994906783, 9.11752096e-09, -0.100799225),
-    ["Underground Cellar"] = CFrame.new(2109.52148, -94.1875076, -708.609131, 0.418592364, 3.34794485e-08, -0.908174217, -5.24141512e-08, 1, 1.27060247e-08, 0.908174217, 4.22825366e-08, 0.418592364),
-    ["Ancient Jungle"] = CFrame.new(1831.71362, 6.62499952, -299.279175, 0.213522509, 1.25553285e-07, -0.976938128, -4.32026184e-08, 1, 1.19074642e-07, 0.976938128, 1.67811702e-08, 0.213522509),
-    ["Sacred Temple"] = CFrame.new(1466.92151, -21.8750591, -622.835693, -0.764787138, 8.14444334e-09, 0.644283056, 2.31097452e-08, 1, 1.4791004e-08, -0.644283056, 2.6201187e-08, -0.764787138)
+    ["Spawn"]            = CFrame.new(45.2788, 252.5629, 2987.1091),
+    ["Sisyphus Statue"]  = CFrame.new(-3728.2161, -135.0744, -1012.1274),
+    ["Coral Reefs"]      = CFrame.new(-3114.7820, 1.3207, 2237.5230),
+    ["Esoteric Depths"]  = CFrame.new(3248.3711, -1301.5303, 1403.8273),
+    ["Crater Island"]    = CFrame.new(1016.4907, 20.0919, 5069.2730),
+    ["Lost Isle"]        = CFrame.new(-3618.1570, 240.8367, -1317.4580),
+    ["Weather Machine"]  = CFrame.new(-1488.5120, 83.1733, 1876.3030),
+    ["Tropical Grove"]   = CFrame.new(-2095.3411, 197.2000, 3718.0801),
+    ["Mount Hallow"]     = CFrame.new(2136.6230, 78.9164, 3272.5044),
+    ["Treasure Room"]    = CFrame.new(-3606.3499, -266.5737, -1580.9734),
+    ["Kohana"]           = CFrame.new(-663.9042, 3.0458, 718.7969),
+    ["Underground Cellar"]=CFrame.new(2109.5215, -94.1875, -708.6091),
+    ["Ancient Jungle"]   = CFrame.new(1831.7136, 6.6250, -299.2792),
+    ["Sacred Temple"]    = CFrame.new(1466.9215, -21.8751, -622.8357)
 }
 
 -- ====================================================================
@@ -107,7 +102,6 @@ local function saveConfig()
     if not writefile or not ensureFolder() then return end
     pcall(function()
         writefile(CONFIG_FILE, HttpService:JSONEncode(Config))
-        print("[Config] Settings saved!")
     end)
 end
 
@@ -115,42 +109,27 @@ local function loadConfig()
     if not readfile or not isfile or not isfile(CONFIG_FILE) then return end
     pcall(function()
         local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
-        for k, v in pairs(data) do
+        for k,v in pairs(data) do
             if DefaultConfig[k] ~= nil then Config[k] = v end
         end
-        print("[Config] Settings loaded!")
     end)
 end
-
 loadConfig()
 
 -- ====================================================================
 --                     NETWORK EVENTS
 -- ====================================================================
-local function getNetworkEvents()
-    local net = NetPackage
-    return {
-        fishing    = net:WaitForChild("RE/FishingCompleted"),
-        sell       = net:WaitForChild("RF/SellAllItems"),
-        charge     = net:WaitForChild("RF/ChargeFishingRod"),
-        minigame   = net:WaitForChild("RF/RequestFishingMinigameStarted"),
-        cancel     = net:WaitForChild("RF/CancelFishingInputs"),
-        equip      = net:WaitForChild("RE/EquipToolFromHotbar"),
-        unequip    = net:WaitForChild("RE/UnequipToolFromHotbar"),
-        favorite   = net:WaitForChild("RE/FavoriteItem"),
-        updateAuto = net:WaitForChild("RF/UpdateAutoFishingState")
-    }
-end
-
-local Events = getNetworkEvents()
-
--- Set auto fishing state TRUE sekali (seperti script lain)
-pcall(function()
-    if Events.updateAuto then
-        Events.updateAuto:InvokeServer(true)
-        print("[Auto Fish] RF/UpdateAutoFishingState set to TRUE")
-    end
-end)
+local Events = {
+    charge     = net:WaitForChild("RF/ChargeFishingRod"),
+    minigame   = net:WaitForChild("RF/RequestFishingMinigameStarted"),
+    finish     = net:WaitForChild("RE/FishingCompleted"),
+    equip      = net:WaitForChild("RE/EquipToolFromHotbar"),
+    unequip    = net:FindFirstChild("RE/UnequipToolFromHotbar"),
+    textEffect = net:WaitForChild("RE/ReplicateTextEffect"),
+    sell       = net:WaitForChild("RF/SellAllItems"),
+    favorite   = net:WaitForChild("RE/FavoriteItem"),
+}
+local updateAuto = net:FindFirstChild("RF/UpdateAutoFishingState")
 
 -- ====================================================================
 --                     MODULES FOR AUTO FAVORITE
@@ -159,108 +138,70 @@ local ItemUtility = require(ReplicatedStorage.Shared.ItemUtility)
 local Replion     = require(ReplicatedStorage.Packages.Replion)
 local PlayerData  = Replion.Client:WaitReplion("Data")
 
--- ====================================================================
---                     RARITY SYSTEM
--- ====================================================================
 local RarityTiers = {
-    Common    = 1,
-    Uncommon  = 2,
-    Rare      = 3,
-    Epic      = 4,
-    Legendary = 5,
-    Mythic    = 6,
-    Secret    = 7
+    Common = 1, Uncommon = 2, Rare = 3, Epic = 4,
+    Legendary = 5, Mythic = 6, Secret = 7
 }
-
-local function getRarityValue(rarity)
-    return RarityTiers[rarity] or 0
-end
-
-local function getFishRarity(itemData)
-    if not itemData or not itemData.Data then return "Common" end
-    return itemData.Data.Rarity or "Common"
-end
+local function getRarityValue(r) return RarityTiers[r] or 0 end
+local function getFishRarity(d) return (d and d.Data and d.Data.Rarity) or "Common" end
 
 -- ====================================================================
 --                     TELEPORT SYSTEM
 -- ====================================================================
 local Teleport = {}
-
-function Teleport.to(locationName)
-    local cframe = LOCATIONS[locationName]
-    if not cframe then
-        warn("❌ [Teleport] Location not found: " .. tostring(locationName))
-        return false
+function Teleport.to(name)
+    local cf = LOCATIONS[name]
+    if not cf then
+        warn("[Teleport] Unknown location:", name); return
     end
-    
-    local success = pcall(function()
-        local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-        local rootPart  = character:FindFirstChild("HumanoidRootPart")
-        if not rootPart then return end
-        rootPart.CFrame = cframe
-        print("✅ [Teleport] Moved to " .. locationName)
+    pcall(function()
+        local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+        local hrp  = char:WaitForChild("HumanoidRootPart")
+        hrp.CFrame = cf
     end)
-    
-    return success
 end
 
 -- ====================================================================
 --                     GPU SAVER
 -- ====================================================================
-local gpuActive   = false
-local whiteScreen = nil
-
+local gpuActive, whiteScreen = false, nil
 local function enableGPU()
     if gpuActive then return end
     gpuActive = true
-    
     pcall(function()
         settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
         game.Lighting.GlobalShadows       = false
         game.Lighting.FogEnd              = 1
         if setfpscap then setfpscap(8) end
     end)
-    
     whiteScreen = Instance.new("ScreenGui")
     whiteScreen.ResetOnSpawn = false
     whiteScreen.DisplayOrder = 999999
-    
-    local frame = Instance.new("Frame")
-    frame.Size             = UDim2.new(1, 0, 1, 0)
-    frame.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
-    frame.Parent           = whiteScreen
-    
-    local label = Instance.new("TextLabel")
-    label.Size                   = UDim2.new(0, 400, 0, 100)
-    label.Position               = UDim2.new(0.5, -200, 0.5, -50)
-    label.BackgroundTransparency = 1
-    label.Text                   = "🟢 GPU SAVER ACTIVE\n\nAuto Fish Running..."
-    label.TextColor3             = Color3.new(0, 1, 0)
-    label.TextSize               = 28
-    label.Font                   = Enum.Font.GothamBold
-    label.TextXAlignment         = Enum.TextXAlignment.Center
-    label.Parent                 = frame
-    
+    local f = Instance.new("Frame", whiteScreen)
+    f.Size = UDim2.new(1,0,1,0)
+    f.BackgroundColor3 = Color3.new(0.1,0.1,0.1)
+    local lbl = Instance.new("TextLabel", f)
+    lbl.Size = UDim2.new(0,400,0,100)
+    lbl.Position = UDim2.new(0.5,-200,0.5,-50)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = "🟢 GPU SAVER ACTIVE\n\nAuto Fish Running..."
+    lbl.TextColor3 = Color3.new(0,1,0)
+    lbl.TextSize   = 28
+    lbl.Font       = Enum.Font.GothamBold
+    lbl.TextXAlignment = Enum.TextXAlignment.Center
     whiteScreen.Parent = game.CoreGui
-    print("[GPU] GPU Saver enabled")
 end
 
 local function disableGPU()
     if not gpuActive then return end
     gpuActive = false
-    
     pcall(function()
         settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
         game.Lighting.GlobalShadows       = true
         game.Lighting.FogEnd              = 100000
         if setfpscap then setfpscap(0) end
     end)
-    
-    if whiteScreen then
-        whiteScreen:Destroy()
-        whiteScreen = nil
-    end
-    print("[GPU] GPU Saver disabled")
+    if whiteScreen then whiteScreen:Destroy() whiteScreen = nil end
 end
 
 -- ====================================================================
@@ -271,242 +212,191 @@ LocalPlayer.Idled:Connect(function()
     VirtualUser:ClickButton2(Vector2.new())
 end)
 
-print("[Anti-AFK] Protection enabled")
-
 -- ====================================================================
 --                     AUTO FAVORITE
 -- ====================================================================
 local favoritedItems = {}
 
 local function isItemFavorited(uuid)
-    local success, result = pcall(function()
-        local items = PlayerData:GetExpect("Inventory").Items
-        for _, item in ipairs(items) do
-            if item.UUID == uuid then
-                return item.Favorited == true
-            end
+    local ok2, result = pcall(function()
+        local inv = PlayerData:GetExpect("Inventory").Items
+        for _,it in ipairs(inv) do
+            if it.UUID == uuid then return it.Favorited == true end
         end
         return false
     end)
-    return success and result or false
+    return ok2 and result or false
 end
 
 local function autoFavoriteByRarity()
     if not Config.AutoFavorite then return end
-    
-    local targetRarity = Config.FavoriteRarity
-    local targetValue  = getRarityValue(targetRarity)
-    if targetValue < 6 then
-        targetValue = 6
-    end
-    
-    local favorited = 0
-    
+    local target = getRarityValue(Config.FavoriteRarity)
+    if target < 6 then target = 6 end
     pcall(function()
-        local items = PlayerData:GetExpect("Inventory").Items
-        if not items or #items == 0 then return end
-        
-        for _, item in ipairs(items) do
+        local inv = PlayerData:GetExpect("Inventory").Items
+        if not inv then return end
+        local count = 0
+        for _, item in ipairs(inv) do
             local data = ItemUtility:GetItemData(item.Id)
             if data and data.Data then
-                local itemName    = data.Data.Name or "Unknown"
                 local rarity      = getFishRarity(data)
                 local rarityValue = getRarityValue(rarity)
-                
-                if rarityValue >= targetValue and rarityValue >= 6 then
+                if rarityValue >= target and rarityValue >= 6 then
                     if not isItemFavorited(item.UUID) and not favoritedItems[item.UUID] then
                         Events.favorite:FireServer(item.UUID)
                         favoritedItems[item.UUID] = true
-                        favorited = favorited + 1
-                        print("[Auto Favorite] ⭐ #" .. favorited .. " - " .. itemName .. " (" .. rarity .. ")")
+                        count = count + 1
                         task.wait(0.3)
                     end
                 end
             end
         end
+        if count > 0 then
+            print("[Auto Favorite] New favorites:", count)
+        end
     end)
-    
-    if favorited > 0 then
-        print("[Auto Favorite] ✅ Complete! Favorited: " .. favorited)
-    end
 end
 
 task.spawn(function()
     while true do
         task.wait(10)
-        if Config.AutoFavorite then
-            autoFavoriteByRarity()
-        end
+        if Config.AutoFavorite then autoFavoriteByRarity() end
     end
 end)
 
 -- ====================================================================
---                     FISHING LOGIC
+--           AUTO FISH V2 (LOGIKA SCRIPT LAIN) + SUPER INSTANT
 -- ====================================================================
-local isFishing     = false
-local fishingActive = false
 
--- === castRod memakai angka asli dari test.lua (paling stabil) ===
-local function castRod()
-    pcall(function()
-        Events.equip:FireServer(1)
-        task.wait(0.05)
-        -- angka charge & minigame dari metode yang sudah teruji
-        Events.charge:InvokeServer(1755848498.4834)
-        task.wait(0.02)
-        Events.minigame:InvokeServer(1.2854545116425, 1)
-        print("[Fishing] 🎣 Cast")
-    end)
+-- Animations
+local AnimFolder  = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Animations")
+local RodIdle     = AnimFolder:WaitForChild("FishingRodReelIdle")
+local RodReel     = AnimFolder:WaitForChild("EasyFishReelStart")
+local RodShake    = AnimFolder:WaitForChild("CastFromFullChargePosition1Hand")
+
+local function getAnimator()
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local hum  = char:WaitForChild("Humanoid")
+    local anim = hum:FindFirstChildOfClass("Animator")
+    if not anim then anim = Instance.new("Animator", hum) end
+    return anim
 end
 
-local function reelIn()
-    pcall(function()
-        Events.fishing:FireServer()
-        print("[Fishing] ✅ Reel (FishingCompleted)")
-    end)
-end
+local animator     = getAnimator()
+local RodShakeAnim = animator:LoadAnimation(RodShake)
+local RodIdleAnim  = animator:LoadAnimation(RodIdle)
+local RodReelAnim  = animator:LoadAnimation(RodReel)
 
--- BLATANT MODE (pakai logic asli juga)
-local function blatantFishingLoop()
-    while fishingActive and Config.BlatantMode do
-        if not isFishing then
-            isFishing = true
-            
-            pcall(function()
-                Events.equip:FireServer(1)
-                task.wait(0.01)
+local AutoV2 = {
+    running     = false,
+    autoCatch   = Config.AutoCatch,
+    perfectCast = Config.PerfectCast
+}
 
-                -- Cast 1
-                task.spawn(function()
-                    Events.charge:InvokeServer(1755848498.4834)
-                    task.wait(0.01)
-                    Events.minigame:InvokeServer(1.2854545116425, 1)
-                end)
-                
-                task.wait(0.05)
-                
-                -- Cast 2
-                task.spawn(function()
-                    Events.charge:InvokeServer(1755848498.4834)
-                    task.wait(0.01)
-                    Events.minigame:InvokeServer(1.2854545116425, 1)
-                end)
-            end)
-            
-            task.wait(Config.FishDelay)   -- Slow Reel Threshold
-            
-            for _ = 1, 5 do
-                pcall(function() 
-                    Events.fishing:FireServer() 
-                end)
-                task.wait(0.01)
-            end
-            
-            task.wait(Config.CatchDelay * 0.5)
-            isFishing = false
-            print("[Blatant] ⚡ Fast cycle")
-        else
-            task.wait(0.01)
-        end
-    end
-end
-
--- NORMAL MODE
-local function normalFishingLoop()
-    while fishingActive and not Config.BlatantMode do
-        if not isFishing then
-            isFishing = true
-            
-            castRod()
-            task.wait(Config.FishDelay)  -- Slow Reel Threshold
-            reelIn()
-            task.wait(Config.CatchDelay) -- cooldown
-            isFishing = false
-        else
-            task.wait(0.1)
-        end
-    end
-end
-
-local function fishingLoop()
-    while fishingActive do
-        if Config.BlatantMode then
-            blatantFishingLoop()
-        else
-            normalFishingLoop()
-        end
-        task.wait(0.1)
-    end
-end
-
--- ====================================================================
---                     AUTO CATCH (EVENT-BASED)
--- ====================================================================
-local function getAutoCatchDelay()
-    local d = tonumber(Config.CatchDelay) or 1
+local function getSlowReelDelay()
+    local d = tonumber(Config.FishDelay) or 1.5
     if d < 0.1 then d = 0.1 end
     return d
 end
 
-local RE_ReplicateTextEffect
-local okRE, errRE = pcall(function()
-    RE_ReplicateTextEffect = NetPackage:WaitForChild("RE/ReplicateTextEffect")
-end)
-
-if okRE and RE_ReplicateTextEffect then
-    RE_ReplicateTextEffect.OnClientEvent:Connect(function(data)
-        if not Config.AutoCatch then return end
-        if not data or not data.TextData then return end
-        if data.TextData.EffectType ~= "Exclaim" then return end  -- tanda '!'
-
-        local char = LocalPlayer.Character
-        if not char then return end
-        local head = char:FindFirstChild("Head")
-        if not head then return end
-        if data.Container ~= head then return end
-
-        local delay = getAutoCatchDelay()   -- Super Instant Delay
-
-        task.spawn(function()
-            task.wait(delay)
-            for i = 1, 3 do
-                pcall(function()
-                    Events.fishing:FireServer()
-                end)
-                task.wait(0.05)
-            end
-        end)
-    end)
-else
-    warn("[AutoCatch] Tidak menemukan RE/ReplicateTextEffect:", errRE)
+local function getSuperInstantDelay()
+    local d = tonumber(Config.CatchDelay) or 1.0
+    if d < 0.05 then d = 0.05 end
+    return d
 end
+
+local function StartAutoFishV2()
+    if AutoV2.running then return end
+    AutoV2.running = true
+
+    pcall(function()
+        if updateAuto then updateAuto:InvokeServer(true) end
+    end)
+
+    task.spawn(function()
+        while AutoV2.running do
+            pcall(function()
+                -- equip rod di slot 1
+                Events.equip:FireServer(1)
+                task.wait(0.1)
+
+                -- charge pakai server time (logika script lain)
+                Events.charge:InvokeServer(workspace:GetServerTimeNow())
+                task.wait(0.5)
+
+                local timestamp = workspace:GetServerTimeNow()
+                RodShakeAnim:Play()
+                Events.charge:InvokeServer(timestamp)
+
+                -- posisi minigame
+                local baseX, baseY = -0.7499996423721313, 1
+                local x, y
+                if AutoV2.perfectCast then
+                    x = baseX + (math.random(-500, 500) / 1e7)
+                    y = baseY + (math.random(-500, 500) / 1e7)
+                else
+                    x = math.random(-1000,1000) / 1000
+                    y = math.random(0,1000)     / 1000
+                end
+
+                RodIdleAnim:Play()
+                Events.minigame:InvokeServer(x, y)
+
+                task.wait(getSlowReelDelay())
+            end)
+            task.wait(0.02)
+        end
+    end)
+end
+
+local function StopAutoFishV2()
+    AutoV2.running = false
+    pcall(function()
+        if updateAuto then updateAuto:InvokeServer(false) end
+    end)
+    RodIdleAnim:Stop()
+    RodShakeAnim:Stop()
+    RodReelAnim:Stop()
+end
+
+-- AutoCatch: Super Instant
+Events.textEffect.OnClientEvent:Connect(function(data)
+    if not AutoV2.autoCatch then return end
+    if not data or not data.TextData then return end
+    if data.TextData.EffectType ~= "Exclaim" then return end
+
+    local char = LocalPlayer.Character
+    if not char then return end
+    local head = char:FindFirstChild("Head")
+    if not head or data.Container ~= head then return end
+
+    local delay = getSuperInstantDelay()
+    task.spawn(function()
+        task.wait(delay)
+        for i = 1,3 do
+            pcall(function() Events.finish:FireServer() end)
+            task.wait(0.05)
+        end
+    end)
+end)
 
 -- ====================================================================
 --                     AUTO SELL
 -- ====================================================================
 local function simpleSell()
-    print("╔═══════════════════════════════════╗")
-    print("[Auto Sell] 💰 Selling all non-favorited items...")
-    
-    local sellSuccess = pcall(function()
-        return Events.sell:InvokeServer()
-    end)
-    
-    if sellSuccess then
-        print("[Auto Sell] ✅ SOLD! (Favorited fish kept safe)")
-        print("╚═══════════════════════════════════╝")
+    print("[Auto Sell] Selling all non-favorited items...")
+    local ok3 = pcall(function() Events.sell:InvokeServer() end)
+    if ok3 then
+        print("[Auto Sell] Done.")
     else
-        warn("[Auto Sell] ❌ Sell failed")
-        print("╚═══════════════════════════════════╝")
+        warn("[Auto Sell] Failed.")
     end
 end
 
 task.spawn(function()
     while true do
         task.wait(Config.SellDelay)
-        if Config.AutoSell then
-            simpleSell()
-        end
+        if Config.AutoSell then simpleSell() end
     end
 end)
 
@@ -530,7 +420,7 @@ WindUI:SetNotificationLower(true)
 
 WindUI:Notify({
     Title   = "Auto Fish Loaded",
-    Content = "Siap memancing dengan WindUI!",
+    Content = "Super Instant Auto Fish siap digunakan.",
     Duration = 5,
     Icon    = "circle-check"
 })
@@ -542,112 +432,104 @@ local MainTab = Window:Tab({
 })
 
 local AutoFishSection = MainTab:Section({
-    Title = "Auto Fishing",
+    Title = "Auto Fishing V2",
     Icon  = "fish"
 })
 
+-- SATU TOGGLE: Super Instant (Auto Fish + Auto Catch)
 AutoFishSection:Toggle({
-    Title   = "BLATANT MODE (3x Faster!)",
-    Content = "Mode super cepat, lebih riskan / lebih spam.",
-    Value   = Config.BlatantMode,
-    Callback = function(value)
-        Config.BlatantMode = value
-        print("[Blatant Mode] " .. (value and "⚡ ENABLED - SUPER FAST!" or "🔴 Disabled - Normal speed"))
-        saveConfig()
-    end
-})
-
-AutoFishSection:Toggle({
-    Title   = "Auto Fish",
-    Content = "Menjalankan loop auto fishing (Normal / Blatant).",
+    Title   = "Super Instant Auto Fish",
+    Content = "Auto Fish V2 + Auto Catch event-based dalam satu toggle.",
     Value   = Config.AutoFish,
-    Callback = function(value)
-        Config.AutoFish   = value
-        fishingActive     = value
-        
-        if value then
-            print("[Auto Fish] 🟢 Started " .. (Config.BlatantMode and "(BLATANT MODE)" or "(Normal)"))
-            task.spawn(fishingLoop)
+    Callback = function(v)
+        Config.AutoFish  = v
+        Config.AutoCatch = v
+        AutoV2.autoCatch = v
+
+        if v then
+            StartAutoFishV2()
+            print("[SuperInstant] ON")
         else
-            print("[Auto Fish] 🔴 Stopped")
-            pcall(function() Events.unequip:FireServer() end)
+            StopAutoFishV2()
+            print("[SuperInstant] OFF")
+            pcall(function()
+                if Events.unequip then Events.unequip:FireServer() end
+            end)
         end
-        
+
         saveConfig()
     end
 })
 
+-- Perfect cast tetap bisa ON/OFF
 AutoFishSection:Toggle({
-    Title   = "Auto Catch (Event Based)",
-    Content = "Otomatis reel saat tanda '!' muncul di kepala (manual & auto).",
-    Value   = Config.AutoCatch,
-    Callback = function(value)
-        Config.AutoCatch = value
-        print("[Auto Catch] " .. (value and "🟢 Enabled" or "🔴 Disabled"))
+    Title   = "Perfect Cast",
+    Content = "Kalau ON: posisi cast mendekati perfect. OFF: lebih random.",
+    Value   = Config.PerfectCast,
+    Callback = function(v)
+        Config.PerfectCast = v
+        AutoV2.perfectCast = v
         saveConfig()
     end
 })
 
 AutoFishSection:Input({
     Title       = "Slow Reel Threshold (detik)",
-    Content     = "Jeda setelah lempar sampai narik (Auto Fish). Default: 1.9",
+    Content     = "Jeda tunggu setelah lempar sebelum script mulai narik. Semakin kecil = lebih cepat.",
     Placeholder = tostring(Config.FishDelay),
     Callback    = function(v)
-        local num = tonumber(v)
-        if num and num >= 0.1 and num <= 10 then
-            Config.FishDelay = num
-            print("[Config] ✅ Slow Reel Threshold set to " .. num .. "s")
+        local n = tonumber(v)
+        if n and n >= 0.1 and n <= 10 then
+            Config.FishDelay = n
             saveConfig()
         else
-            warn("[Config] ❌ Invalid delay (must be 0.1-10)")
+            warn("[Config] Invalid Slow Reel (0.1-10)")
         end
     end
 })
 
 AutoFishSection:Input({
     Title       = "Super Instant Delay (detik)",
-    Content     = "Jeda AutoCatch setelah '!' sebelum FishingCompleted. Default: 1",
+    Content     = "Jeda setelah tanda '!' sebelum script mengirim FishingCompleted. Semakin kecil = lebih instant.",
     Placeholder = tostring(Config.CatchDelay),
     Callback    = function(v)
-        local num = tonumber(v)
-        if num and num >= 0.1 and num <= 10 then
-            Config.CatchDelay = num
-            print("[Config] ✅ Super Instant Delay set to " .. num .. "s")
+        local n = tonumber(v)
+        if n and n >= 0.05 and n <= 10 then
+            Config.CatchDelay = n
             saveConfig()
         else
-            warn("[Config] ❌ Invalid delay (must be 0.1-10)")
+            warn("[Config] Invalid Super Instant Delay (0.05-10)")
         end
     end
 })
 
+-- ===== AUTO SELL =====
 local SellSection = MainTab:Section({
     Title = "Auto Sell",
     Icon  = "dollar-sign"
 })
 
 SellSection:Toggle({
-    Title   = "Auto Sell (Keeps Favorited)",
+    Title   = "Auto Sell (Keep Favorites)",
     Content = "Jual semua kecuali ikan yang sudah di-favorite.",
     Value   = Config.AutoSell,
-    Callback = function(value)
-        Config.AutoSell = value
-        print("[Auto Sell] " .. (value and "🟢 Enabled" or "🔴 Disabled"))
+    Callback = function(v)
+        Config.AutoSell = v
         saveConfig()
     end
 })
 
 SellSection:Input({
     Title       = "Sell Delay (detik)",
-    Content     = "Seberapa sering auto sell. Default: 30 (10 - 300).",
+    Content     = "Seberapa sering auto sell (default 30, min 10).",
     Placeholder = tostring(Config.SellDelay),
     Callback    = function(v)
-        local num = tonumber(v)
-        if num and num >= 10 and num <= 300 then
-            Config.SellDelay = num
-            print("[Config] ✅ Sell delay set to " .. num .. "s")
+        local n = tonumber(v)
+        if n and n >= 10 and n <= 300 then
+            Config.SellDelay = n
             saveConfig()
         else
-            warn("[Config] ❌ Invalid delay (must be 10-300)")
+            warn("[Config] Invalid Sell Delay (10-300)")
         end
     end
 })
@@ -671,13 +553,11 @@ local TeleportSection = TeleportTab:Section({
     Icon  = "map-pin"
 })
 
-for locationName, _ in pairs(LOCATIONS) do
+for name,_ in pairs(LOCATIONS) do
     TeleportSection:Button({
-        Title   = locationName,
-        Content = "Teleport ke " .. locationName,
-        Callback = function()
-            Teleport.to(locationName)
-        end
+        Title   = name,
+        Content = "Teleport ke "..name,
+        Callback = function() Teleport.to(name) end
     })
 end
 
@@ -694,47 +574,41 @@ local PerfSection = SettingsTab:Section({
 
 PerfSection:Toggle({
     Title   = "GPU Saver Mode",
-    Content = "Turunkan kualitas grafis untuk hemat GPU/CPU.",
+    Content = "Turunkan kualitas grafis untuk hemat resource.",
     Value   = Config.GPUSaver,
-    Callback = function(value)
-        Config.GPUSaver = value
-        if value then
-            enableGPU()
-        else
-            disableGPU()
-        end
+    Callback = function(v)
+        Config.GPUSaver = v
+        if v then enableGPU() else disableGPU() end
         saveConfig()
     end
 })
 
-local FavoriteSection = SettingsTab:Section({
+local FavSection = SettingsTab:Section({
     Title = "Auto Favorite",
     Icon  = "star"
 })
 
-FavoriteSection:Toggle({
+FavSection:Toggle({
     Title   = "Auto Favorite Fish",
-    Content = "Otomatis favorite ikan rarity tinggi (Mythic / Secret).",
+    Content = "Favorite otomatis ikan Mythic/Secret.",
     Value   = Config.AutoFavorite,
-    Callback = function(value)
-        Config.AutoFavorite = value
-        print("[Auto Favorite] " .. (value and "🟢 Enabled" or "🔴 Disabled"))
+    Callback = function(v)
+        Config.AutoFavorite = v
         saveConfig()
     end
 })
 
-FavoriteSection:Dropdown({
+FavSection:Dropdown({
     Title   = "Favorite Rarity",
     Content = "Minimal rarity untuk auto favorite.",
-    Values  = {"Mythic", "Secret"},
-    Callback = function(option)
-        Config.FavoriteRarity = option
-        print("[Config] Favorite rarity set to: " .. option .. "+")
+    Values  = {"Mythic","Secret"},
+    Callback = function(opt)
+        Config.FavoriteRarity = opt
         saveConfig()
     end
 })
 
-FavoriteSection:Button({
+FavSection:Button({
     Title   = "Favorite Semua Mythic/Secret Sekarang",
     Content = "Jalankan autoFavoriteByRarity sekali.",
     Callback = function()
@@ -742,29 +616,4 @@ FavoriteSection:Button({
     end
 })
 
--- ===== TAB INFO =====
-local InfoTab = Window:Tab({
-    Title = "Info",
-    Icon  = "info"
-})
-
-local InfoSection = InfoTab:Section({
-    Title = "Informasi",
-    Icon  = "info"
-})
-
-InfoSection:Paragraph({
-    Title = "Fitur",
-    Content = [[
-• Auto Fishing (Normal + Blatant) dengan metode test.lua asli
-• Auto Sell (menjaga ikan yang di-favorite)
-• Auto Catch berbasis event (manual & auto)
-• RF/UpdateAutoFishingState diset TRUE saat load
-• GPU Saver Mode
-• Anti-AFK
-• Teleport lokasi
-• Auto Favorite Mythic & Secret (remote resmi)
-    ]]
-})
-
-print("🎣 Auto Fish V4.0 - WindUI Edition (CAST FIX) Loaded!")
+print("🎣 Auto Fish V4.0 - WindUI + SuperInstant V2 Loaded!")
