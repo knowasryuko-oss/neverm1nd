@@ -32,13 +32,13 @@ local Events = {
 local updateAuto = net:FindFirstChild("RF/UpdateAutoFishingState")
 
 -----------------------
--- CONFIG SEDERHANA (DI RAM)
+-- CONFIG
 -----------------------
 local Config = {
-    AutoFish    = false,  -- Super Instant toggle
+    AutoFish    = false,
     PerfectCast = true,
-    FishDelay   = 1.5,    -- Slow Reel Threshold (detik)
-    CatchDelay  = 1.0,    -- Super Instant Delay (detik)
+    FishDelay   = 1.5,
+    CatchDelay  = 1.0,
 }
 
 -----------------------
@@ -81,19 +81,15 @@ local function StartAutoFishV2()
     task.spawn(function()
         while AutoV2.running do
             pcall(function()
-                -- equip rod di hotbar slot 1
                 Events.equip:FireServer(1)
                 task.wait(0.1)
 
-                -- charge pertama (pakai waktu server)
                 Events.charge:InvokeServer(workspace:GetServerTimeNow())
                 task.wait(0.5)
 
-                -- charge kedua (release) dengan timestamp
                 local timestamp = workspace:GetServerTimeNow()
                 Events.charge:InvokeServer(timestamp)
 
-                -- posisi minigame
                 local baseX, baseY = -0.7499996423721313, 1
                 local x, y
                 if Config.PerfectCast then
@@ -105,8 +101,6 @@ local function StartAutoFishV2()
                 end
 
                 Events.minigame:InvokeServer(x, y)
-
-                -- tunggu SlowReelThreshold
                 task.wait(getSlowReelDelay())
             end)
             task.wait(0.02)
@@ -123,12 +117,12 @@ local function StopAutoFishV2()
 end
 
 -----------------------
--- AUTOCATCH SUPER INSTANT (EVENT)
+-- AUTOCATCH EVENT
 -----------------------
 Events.textEffect.OnClientEvent:Connect(function(data)
     if not AutoV2.autoCatch then return end
     if not data or not data.TextData then return end
-    if data.TextData.EffectType ~= "Exclaim" then return end  -- tanda '!'
+    if data.TextData.EffectType ~= "Exclaim" then return end
 
     local char = LocalPlayer.Character
     if not char then return end
@@ -171,10 +165,10 @@ WindUI:Notify({
 })
 
 -----------------------
--- CARI FRAME UTAMA WINDUI & TOGGLE
+-- CARI UI WINDUI UNTUK TOGGLE
 -----------------------
-local mainGui          -- ScreenGui WindUI
-local mainRootFrame    -- Frame utama yang kita hide/show
+local mainGui
+local mainRootFrame
 local uiVisible = true
 
 local function findMainUi()
@@ -238,7 +232,7 @@ task.spawn(function()
 end)
 
 -----------------------
--- ISI WINDOW (TAB MAIN)
+-- ISI WINDOW
 -----------------------
 local MainTab = Window:Tab({
     Title = "Main",
@@ -258,10 +252,8 @@ AutoFishSection:Toggle({
         Config.AutoFish = v
         if v then
             StartAutoFishV2()
-            print("[SuperInstant] ON")
         else
             StopAutoFishV2()
-            print("[SuperInstant] OFF")
         end
     end
 })
@@ -283,7 +275,6 @@ AutoFishSection:Input({
         local n = tonumber(v)
         if n and n >= 0.1 and n <= 10 then
             Config.FishDelay = n
-            print("[Config] SlowReel =", n)
         else
             warn("[Config] Invalid SlowReel (0.1-10)")
         end
@@ -298,7 +289,6 @@ AutoFishSection:Input({
         local n = tonumber(v)
         if n and n >= 0.05 and n <= 10 then
             Config.CatchDelay = n
-            print("[Config] SuperInstantDelay =", n)
         else
             warn("[Config] Invalid SuperInstantDelay (0.05-10)")
         end
@@ -306,7 +296,7 @@ AutoFishSection:Input({
 })
 
 -- =========================================================
--- NEVERM1ND FLOATING BUTTON (MODEL AJO-MOK)
+-- NEVERM1ND FLOATING BUTTON
 -- =========================================================
 local function createNeverm1ndGui(parent)
     local screenGui = Instance.new("ScreenGui")
@@ -327,9 +317,10 @@ local function createNeverm1ndGui(parent)
     Frame1.BorderSizePixel = 0
     Frame1.Active = true
     Frame1.Draggable = false
+    Frame1.ClipsDescendants = true   -- penting: anak ikut terpotong sudut
     Frame1.Parent = screenGui
 
-    -- Sistem drag (PC + Mobile)
+    -- Drag (PC + Mobile)
     local dragging = false
     local dragStart
     local startPos
@@ -355,9 +346,7 @@ local function createNeverm1ndGui(parent)
             connection = input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
-                    if connection then
-                        connection:Disconnect()
-                    end
+                    if connection then connection:Disconnect() end
                 end
             end)
         end
@@ -377,7 +366,7 @@ local function createNeverm1ndGui(parent)
         end
     end)
 
-    -- UIGradient background
+    -- Background gradient + border
     local UIGradient2 = Instance.new("UIGradient", Frame1)
     UIGradient2.Rotation = 50
     UIGradient2.Color = ColorSequence.new{
@@ -386,11 +375,9 @@ local function createNeverm1ndGui(parent)
         ColorSequenceKeypoint.new(1, Color3.new(0.643137,0.615686,1))
     }
 
-    -- UICorner
     local UICorner3 = Instance.new("UICorner", Frame1)
     UICorner3.CornerRadius = UDim.new(0, 15)
 
-    -- UIStroke
     local UIStroke4 = Instance.new("UIStroke", Frame1)
     UIStroke4.Color = Color3.new(1, 1, 1)
     UIStroke4.Thickness = 2
@@ -402,34 +389,24 @@ local function createNeverm1ndGui(parent)
         ColorSequenceKeypoint.new(1, Color3.new(0.137255,0.137255,0.137255))
     }
 
-    -- Icon Neverm1nd (diperbesar + crop supaya penuh)
+    -- Icon Neverm1nd FULL di dalam border
     local ImageLabel6 = Instance.new("ImageLabel", Frame1)
     ImageLabel6.Name = "imege"
     ImageLabel6.BackgroundTransparency = 1
     ImageLabel6.BorderSizePixel = 0
-    ImageLabel6.BorderColor3 = Color3.new(0, 0, 0)
-    ImageLabel6.BackgroundColor3 = Color3.new(1, 1, 1)
-
     ImageLabel6.AnchorPoint = Vector2.new(0.5, 0.5)
     ImageLabel6.Position    = UDim2.new(0.5, 0, 0.5, 0)
-    -- diperbesar 1.4x lalu di-crop oleh frame (hampir tidak ada border ungu)
-    ImageLabel6.Size        = UDim2.new(1.4, 0, 1.4, 0)
-
-    ImageLabel6.Image     = "rbxassetid://100651748260650"
-    ImageLabel6.ScaleType = Enum.ScaleType.Crop  -- zoom & crop agar penuh
+    ImageLabel6.Size        = UDim2.new(1, 0, 1, 0) -- penuh dalam frame
+    ImageLabel6.Image       = "rbxassetid://100651748260650"
+    ImageLabel6.ScaleType   = Enum.ScaleType.Fit     -- rasio tetap, frame yang membatasi sudut
 
     -- Tombol transparan untuk klik/toggle
     local TextButton7 = Instance.new("TextButton", Frame1)
-    TextButton7.TextColor3 = Color3.new(0, 0, 0)
-    TextButton7.BorderColor3 = Color3.new(0, 0, 0)
-    TextButton7.TextTransparency = 1
-    TextButton7.Font = Enum.Font.SourceSans
     TextButton7.Name = "togl"
-    TextButton7.TextSize = 14
-    TextButton7.Size = UDim2.new(0, 55, 0, 50)
+    TextButton7.Size = UDim2.new(0, 55, 0, 55)
     TextButton7.BackgroundTransparency = 1
     TextButton7.BorderSizePixel = 0
-    TextButton7.BackgroundColor3 = Color3.new(1, 1, 1)
+    TextButton7.TextTransparency = 1
     TextButton7.ZIndex = 9999999
 
     -- Drag juga bisa lewat tombol
@@ -444,9 +421,7 @@ local function createNeverm1ndGui(parent)
             connection = input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
-                    if connection then
-                        connection:Disconnect()
-                    end
+                    if connection then connection:Disconnect() end
                 end
             end)
         end
@@ -462,7 +437,7 @@ local function createNeverm1ndGui(parent)
     return screenGui
 end
 
--- Hapus Neverm1nd lama kalau ada
+-- Hapus Neverm1nd lama
 local function destroyOldNeverm1nd()
     for _, gui in ipairs(CoreGui:GetChildren()) do
         if gui:IsA("ScreenGui") and gui.Name == "Neverm1nd" then
@@ -482,7 +457,7 @@ end
 
 destroyOldNeverm1nd()
 
--- Tentukan parent cocok (gethui atau CoreGui)
+-- Pilih parent (gethui/CoreGui)
 local parentForNeverm1nd = CoreGui
 pcall(function()
     if typeof(gethui) == "function" then
@@ -494,12 +469,10 @@ pcall(function()
 end)
 
 local neverGui = createNeverm1ndGui(parentForNeverm1nd)
-
--- Klik tombol Neverm1nd = toggle UI WindUI
 local toggleButton = neverGui:WaitForChild("main"):WaitForChild("togl")
+
 toggleButton.MouseButton1Click:Connect(function()
-    local newState = not uiVisible
-    setMainVisible(newState)
+    setMainVisible(not uiVisible)
 end)
 
 print("[SuperInstant] Script + Neverm1nd floating button loaded.")
