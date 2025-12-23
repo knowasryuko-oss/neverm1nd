@@ -1,5 +1,5 @@
 -- =========================================================
--- AUTO FISHING MODE • SUPER INSTANT (FLOW ATOMIC)
+-- AUTO FISHING MODE • SUPER INSTANT (FLOW ATOMIC, V3)
 -- =========================================================
 
 -----------------------
@@ -169,7 +169,7 @@ task.spawn(function()
 end)
 
 -----------------------
--- AUTO FISHING LOOP (CANCEL → CHARGE x2 → MINIGAME → '!' → FISHINGCOMPLETE → CANCEL → SLOWREEL)
+-- AUTO FISHING LOOP (TERIKAT '!')
 -----------------------
 local Auto = { running = false }
 
@@ -213,7 +213,7 @@ local function StartAutoFishing()
                 -- 2) ChargeFishingRod x2 (hold & release)
                 local t1 = workspace:GetServerTimeNow()
                 Events.charge:InvokeServer(nil, nil, nil, t1)
-                task.wait(0.25) -- durasi hold (tweak kalau perlu)
+                task.wait(0.25) -- durasi hold (boleh di-tweak)
 
                 local t2 = workspace:GetServerTimeNow()
                 Events.charge:InvokeServer(nil, nil, nil, t2)
@@ -250,12 +250,7 @@ local function StartAutoFishing()
                     task.wait(Config.BurstGap or 0.03)
                 end
 
-                -- 7) Cancel lagi untuk nutup minigame/animasi
-                pcall(function()
-                    Events.cancelInputs:InvokeServer()
-                end)
-
-                -- 8) SlowReel sebelum siklus berikut
+                -- 7) SlowReel sebelum siklus berikut
                 task.wait(getSlowReel())
             end)
 
@@ -285,7 +280,7 @@ local Window = WindUI:CreateWindow({
     Title  = "Auto Fishing Mode • Super Instant",
     Icon   = "fish",
     Author = "by YOU",
-    Folder = "AtomicRebuild_FinalV2",
+    Folder = "AtomicRebuild_FinalV3",
     Size   = UDim2.fromOffset(500, 340),
     Theme  = "Indigo",
     KeySystem = false
@@ -294,7 +289,7 @@ local Window = WindUI:CreateWindow({
 WindUI:SetNotificationLower(true)
 WindUI:Notify({
     Title   = "Loaded",
-    Content = "Rebuild Atomic-Style Auto Fishing siap.\nEquip pancing dulu manual.",
+    Content = "Rebuild Atomic-Style Auto Fishing V3 siap.\nEquip pancing dulu manual.",
     Duration= 6,
     Icon    = "circle-check"
 })
@@ -497,7 +492,6 @@ local function createNeverm1ndGui(parent)
     local ImageCorner = Instance.new("UICorner", ImageLabel6)
     ImageCorner.CornerRadius = UDim.new(0, 13)
 
-    -- drag
     local dragging = false
     local dragStart
     local startPos
@@ -613,4 +607,4 @@ toggleButton.MouseButton1Click:Connect(function()
     setMainVisible(not uiVisible)
 end)
 
-print("[AtomicRebuild_FinalV2] Script loaded.")
+print("[AtomicRebuild_FinalV3] Script loaded.")
