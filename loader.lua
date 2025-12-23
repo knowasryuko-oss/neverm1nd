@@ -1,8 +1,5 @@
 -- =========================================================
--- STABLE ATOMIC-STYLE AUTO FISHING
--- - Auto cast pakai remotes asli (Charge + Minigame)
--- - Super instant catch nunggu tanda '!' (server signal)
--- - Minigame bar disembunyikan di client
+-- ATOMIC-STYLE BLATANT AUTO FISHING (MIRIP SEPERTI ATOMIC)
 -- =========================================================
 
 -----------------------
@@ -41,10 +38,10 @@ local Events = {
 local Config = {
     AutoFish       = false,   -- auto lempar + mulai minigame
     AutoCatch      = true,    -- auto tarik saat '!'
-    PerfectCast    = true,
-    FishDelay      = 0.55,    -- slow reel threshold (detik)
-    CatchDelay     = 0.001,   -- super instant delay setelah '!' (detik)
-    HideMinigameUI = true,    -- sembunyikan bar minigame di layar
+    PerfectCast    = true,    -- posisi minigame mendekati perfect
+    FishDelay      = 0.55,    -- jeda antar cast (detik)
+    CatchDelay     = 0.001,   -- jeda setelah '!' sebelum FishingCompleted
+    HideMinigameUI = true,    -- sembunyikan bar hijau "Klik Cepat!"
 }
 
 -----------------------
@@ -73,7 +70,7 @@ local function getCatchDelay()
 end
 
 -----------------------
--- HIDE MINIGAME GUI (CLIENT SIDE)
+-- HIDE MINIGAME GUI (CLIENT-SIDE)
 -----------------------
 local function hideIfFishingGui(inst)
     if not Config.HideMinigameUI then return end
@@ -82,18 +79,17 @@ local function hideIfFishingGui(inst)
     local txt = tostring(inst.Text or "")
     if txt == "" then return end
 
-    -- substring saja, supaya "Klik Cepat! (004)" juga kena
+    -- match berbagai teks yang muncul di minigame
     if txt:find("Klik Cepat!") or txt:find("Click Fast") or txt:find("Klik untuk Lempar") then
         local frame = inst:FindFirstAncestorOfClass("Frame")
         if frame then frame.Visible = false end
-
         local sg = inst:FindFirstAncestorOfClass("ScreenGui")
         if sg then sg.Enabled = false end
     end
 end
 
 local function setupHideMinigame()
-    local function hookRoot(root)
+    local function hook(root)
         if not root then return end
         for _, inst in ipairs(root:GetDescendants()) do
             hideIfFishingGui(inst)
@@ -101,21 +97,26 @@ local function setupHideMinigame()
         root.DescendantAdded:Connect(hideIfFishingGui)
     end
 
-    hookRoot(CoreGui)
+    hook(CoreGui)
     local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-    if pg then hookRoot(pg) end
+    if pg then hook(pg) end
 end
 
 setupHideMinigame()
 
 -----------------------
--- AUTO FISH (CAST LOOP, NUNGGU '!')
+-- AUTO FISH LOOP (REMOTE MIRIP COBALT)
 -----------------------
 local AutoState = { running = false }
 
 local function StartAutoFish()
     if AutoState.running then return end
     AutoState.running = true
+
+    -- equip rod SEKALI di awal (mirip Atomic yang tidak spam equip di loop)
+    pcall(function()
+        Events.equip:FireServer(1)
+    end)
 
     pcall(function()
         Events.updateAuto:InvokeServer(true)
@@ -124,26 +125,22 @@ local function StartAutoFish()
     task.spawn(function()
         while AutoState.running do
             pcall(function()
-                -- Cancel state lama (aman)
+                -- Cancel state mancing sebelumnya
                 pcall(function()
                     Events.cancelInputs:InvokeServer()
                 end)
 
-                -- Equip rod slot 1
-                Events.equip:FireServer(1)
-                task.wait(0.05)
+                -- ChargeFishingRod ala Cobalt:
+                -- Event:InvokeServer(nil, nil, nil, 1766496148.4334)
+                local tsCharge = workspace:GetServerTimeNow()
+                Events.charge:InvokeServer(nil, nil, nil, tsCharge)
 
-                -- ChargeFishingRod: hold + release pakai timestamp server
-                local t1 = workspace:GetServerTimeNow()
-                Events.charge:InvokeServer(t1)   -- mulai charge
-                task.wait(0.4)                  -- durasi hold (bisa dikecilkan sedikit)
-
-                local t2 = workspace:GetServerTimeNow()
-                Events.charge:InvokeServer(t2)   -- lepas charge
+                task.wait(0.03) -- jeda kecil seperti "hold"
 
                 -- Start minigame
                 local x, y
                 if Config.PerfectCast then
+                    -- base dari script lamamu / Atomic-style
                     local baseX, baseY = -0.7499996423721313, 1
                     x = baseX + (math.random(-500,500)/1e7)
                     y = baseY + (math.random(-500,500)/1e7)
@@ -153,15 +150,14 @@ local function StartAutoFish()
                 end
 
                 local tsMini = workspace:GetServerTimeNow()
-                -- tambahkan timestamp seperti log Cobalt
+                -- persis pola Cobalt: x, y, serverTime
                 Events.minigame:InvokeServer(x, y, tsMini)
 
-                -- Tunggu sebelum mulai siklus berikutnya.
-                -- Waktu sebenarnya ikan “makan” diatur server; kita cukup kasih jeda.
+                -- Tunggu sebelum cast berikutnya
                 task.wait(getFishDelay())
             end)
 
-            task.wait(0.02)
+            task.wait(0.01)
         end
     end)
 end
@@ -179,12 +175,12 @@ local function StopAutoFish()
 end
 
 -----------------------
--- SUPER INSTANT AUTO CATCH (PAKAI '!')
+-- SUPER INSTANT AUTO CATCH (NUNGGU '!')
 -----------------------
 Events.textEffect.OnClientEvent:Connect(function(data)
     if not Config.AutoCatch then return end
     if not data or not data.TextData then return end
-    if data.TextData.EffectType ~= "Exclaim" then return end -- tanda '!'
+    if data.TextData.EffectType ~= "Exclaim" then return end  -- tanda '!'
 
     local char = LocalPlayer.Character
     if not char then return end
@@ -194,14 +190,10 @@ Events.textEffect.OnClientEvent:Connect(function(data)
     local delay = getCatchDelay()
     task.spawn(function()
         task.wait(delay)
-
-        -- spam 3x untuk jaga-jaga (mirip pola kamu sebelumnya & atomic yang spam)
-        for i = 1,3 do
-            pcall(function()
-                Events.finish:FireServer()
-            end)
-            task.wait(0.03)
-        end
+        -- Cobalt: RE/FishingCompleted:FireServer() tanpa argumen
+        pcall(function()
+            Events.finish:FireServer()
+        end)
     end)
 end)
 
@@ -223,13 +215,13 @@ local Window = WindUI:CreateWindow({
 WindUI:SetNotificationLower(true)
 WindUI:Notify({
     Title   = "Loaded",
-    Content = "Stable Atomic-style Auto Fishing siap.",
+    Content = "Atomic-style Auto Fishing siap.",
     Duration= 5,
     Icon    = "circle-check"
 })
 
 -----------------------
--- FIND MAIN UI FOR FLOATING BUTTON TOGGLE
+-- FIND MAIN UI UNTUK TOGGLE FLOATING BUTTON
 -----------------------
 local mainGui
 local mainRootFrame
@@ -307,7 +299,7 @@ local AutoSection = MainTab:Section({
 
 AutoSection:Toggle({
     Title   = "Auto Fishing (Blatant)",
-    Content = "Lempar + mulai minigame otomatis. Tarik ikan pakai tanda '!'.",
+    Content = "Lempar + mulai minigame otomatis (charge & minigame sama seperti Atomic).",
     Value   = Config.AutoFish,
     Callback = function(v)
         Config.AutoFish = v
@@ -322,7 +314,7 @@ AutoSection:Toggle({
 
 AutoSection:Toggle({
     Title   = "Super Instant Auto Catch ('!')",
-    Content = "Tarik ikan segera setelah tanda '!' muncul di kepala.",
+    Content = "Tarik ikan segera setelah tanda '!' dari server.",
     Value   = Config.AutoCatch,
     Callback = function(v)
         Config.AutoCatch = v
@@ -341,7 +333,7 @@ AutoSection:Toggle({
 
 AutoSection:Input({
     Title       = "Slow Reel Threshold (detik)",
-    Content     = "Jeda antar cast. Semakin kecil, semakin sering notif ikan.",
+    Content     = "Jeda antar cast. Kecilkan (0.2 / 0.1) untuk efek banyak notif seperti Atomic.",
     Placeholder = tostring(Config.FishDelay),
     Callback    = function(v)
         local n = tonumber(v)
@@ -356,7 +348,7 @@ AutoSection:Input({
 
 AutoSection:Input({
     Title       = "Super Instant Delay (detik)",
-    Content     = "Jeda setelah '!' sebelum FishingCompleted. Contoh 0.001 - 0.05.",
+    Content     = "Delay setelah '!' sebelum FishingCompleted. Contoh 0.001 - 0.02.",
     Placeholder = tostring(Config.CatchDelay),
     Callback    = function(v)
         local n = tonumber(v)
@@ -490,7 +482,6 @@ local function createNeverm1ndGui(parent)
     TextButton7.TextTransparency = 1
     TextButton7.ZIndex = 9999999
 
-    -- Drag juga lewat tombol
     TextButton7.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
@@ -553,4 +544,4 @@ toggleButton.MouseButton1Click:Connect(function()
     setMainVisible(not uiVisible)
 end)
 
-print("[AtomicStyle-Stable] Script loaded.")
+print("[AtomicStyle-Final] Script loaded.")
