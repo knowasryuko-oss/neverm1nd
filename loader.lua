@@ -1,5 +1,5 @@
 -- ====================================================================
---                 AUTO FISH V4.0 - WINDUI EDITION (REVISI)
+--                 AUTO FISH V4.0 - WINDUI EDITION (FIX CAST)
 -- ====================================================================
 
 -- ====== CRITICAL DEPENDENCY VALIDATION ======
@@ -138,11 +138,19 @@ local function getNetworkEvents()
         equip      = net:WaitForChild("RE/EquipToolFromHotbar"),
         unequip    = net:WaitForChild("RE/UnequipToolFromHotbar"),
         favorite   = net:WaitForChild("RE/FavoriteItem"),
-        updateAuto = net:WaitForChild("RF/UpdateAutoFishingState") -- baru
+        updateAuto = net:WaitForChild("RF/UpdateAutoFishingState")
     }
 end
 
 local Events = getNetworkEvents()
+
+-- Set auto fishing state TRUE sekali (seperti script lain)
+pcall(function()
+    if Events.updateAuto then
+        Events.updateAuto:InvokeServer(true)
+        print("[Auto Fish] RF/UpdateAutoFishingState set to TRUE")
+    end
+end)
 
 -- ====================================================================
 --                     MODULES FOR AUTO FAVORITE
@@ -338,20 +346,15 @@ end)
 local isFishing     = false
 local fishingActive = false
 
+-- === castRod memakai angka asli dari test.lua (paling stabil) ===
 local function castRod()
     pcall(function()
         Events.equip:FireServer(1)
         task.wait(0.05)
-
-        -- Versi sederhana, hanya pakai argumen ke-4 (timestamp)
-        Events.charge:InvokeServer(nil, nil, nil, workspace:GetServerTimeNow())
+        -- angka charge & minigame dari metode yang sudah teruji
+        Events.charge:InvokeServer(1755848498.4834)
         task.wait(0.02)
-
-        -- X/Y bisa diubah kalau mau perfect cast, di sini contoh -1.233, 0.5
-        local x = -1.233
-        local y = 0.5
-        local t = workspace:GetServerTimeNow()
-        Events.minigame:InvokeServer(x, y, t)
+        Events.minigame:InvokeServer(1.2854545116425, 1)
         print("[Fishing] 🎣 Cast")
     end)
 end
@@ -363,7 +366,7 @@ local function reelIn()
     end)
 end
 
--- BLATANT MODE
+-- BLATANT MODE (pakai logic asli juga)
 local function blatantFishingLoop()
     while fishingActive and Config.BlatantMode do
         if not isFishing then
@@ -373,19 +376,20 @@ local function blatantFishingLoop()
                 Events.equip:FireServer(1)
                 task.wait(0.01)
 
-                -- 2x charge + minigame overlap
+                -- Cast 1
                 task.spawn(function()
-                    Events.charge:InvokeServer(nil,nil,nil,workspace:GetServerTimeNow())
+                    Events.charge:InvokeServer(1755848498.4834)
                     task.wait(0.01)
-                    Events.minigame:InvokeServer(-1.233, 0.5, workspace:GetServerTimeNow())
+                    Events.minigame:InvokeServer(1.2854545116425, 1)
                 end)
                 
                 task.wait(0.05)
                 
+                -- Cast 2
                 task.spawn(function()
-                    Events.charge:InvokeServer(nil,nil,nil,workspace:GetServerTimeNow())
+                    Events.charge:InvokeServer(1755848498.4834)
                     task.wait(0.01)
-                    Events.minigame:InvokeServer(-1.233, 0.5, workspace:GetServerTimeNow())
+                    Events.minigame:InvokeServer(1.2854545116425, 1)
                 end)
             end)
             
@@ -437,8 +441,6 @@ end
 
 -- ====================================================================
 --                     AUTO CATCH (EVENT-BASED)
---   Bekerja saat mancing manual & Auto Fish (pakai CatchDelay sebagai
---   "Super Instant Delay" = jeda setelah '!' sebelum FishingCompleted)
 -- ====================================================================
 local function getAutoCatchDelay()
     local d = tonumber(Config.CatchDelay) or 1
@@ -466,7 +468,6 @@ if okRE and RE_ReplicateTextEffect then
         local delay = getAutoCatchDelay()   -- Super Instant Delay
 
         task.spawn(function()
-            -- tunggu sedikit setelah '!', lalu spam FishingCompleted 3x
             task.wait(delay)
             for i = 1, 3 do
                 pcall(function()
@@ -563,13 +564,6 @@ AutoFishSection:Toggle({
     Callback = function(value)
         Config.AutoFish   = value
         fishingActive     = value
-
-        -- sinkron dengan RF/UpdateAutoFishingState
-        pcall(function()
-            if Events.updateAuto then
-                Events.updateAuto:InvokeServer(value) -- true saat ON, false saat OFF
-            end
-        end)
         
         if value then
             print("[Auto Fish] 🟢 Started " .. (Config.BlatantMode and "(BLATANT MODE)" or "(Normal)"))
@@ -762,10 +756,10 @@ local InfoSection = InfoTab:Section({
 InfoSection:Paragraph({
     Title = "Fitur",
     Content = [[
-• Auto Fishing (Normal + Blatant)
+• Auto Fishing (Normal + Blatant) dengan metode test.lua asli
 • Auto Sell (menjaga ikan yang di-favorite)
 • Auto Catch berbasis event (manual & auto)
-• RF/UpdateAutoFishingState sinkron dengan Auto Fish
+• RF/UpdateAutoFishingState diset TRUE saat load
 • GPU Saver Mode
 • Anti-AFK
 • Teleport lokasi
@@ -773,4 +767,4 @@ InfoSection:Paragraph({
     ]]
 })
 
-print("🎣 Auto Fish V4.0 - WindUI Edition (Revisi) Loaded!")
+print("🎣 Auto Fish V4.0 - WindUI Edition (CAST FIX) Loaded!")
