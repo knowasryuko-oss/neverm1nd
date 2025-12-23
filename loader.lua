@@ -171,24 +171,22 @@ WindUI:Notify({
 })
 
 -----------------------
--- FUNGSI CARI & TOGGLE MAIN GUI WINDUI
+-- CARI FRAME UTAMA WINDUI & TOGGLE
 -----------------------
-local mainGui
+local mainGui          -- ScreenGui WindUI
+local mainRootFrame    -- Frame utama yang kita hide/show
 local uiVisible = true
 
-local function findMainGui()
+local function findMainUi()
     local parents = {}
 
-    -- CoreGui (umum di executor)
     table.insert(parents, CoreGui)
 
-    -- PlayerGui (kalau lib parent ke PlayerGui)
     local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
     if playerGui then
         table.insert(parents, playerGui)
     end
 
-    -- gethui() (beberapa executor pakai ini)
     pcall(function()
         if typeof(gethui) == "function" then
             local hui = gethui()
@@ -203,38 +201,45 @@ local function findMainGui()
             if inst:IsA("TextLabel") and tostring(inst.Text):find("Super Instant AutoFish V2") then
                 local sg = inst:FindFirstAncestorOfClass("ScreenGui")
                 if sg then
-                    return sg
+                    -- cari frame teratas di bawah ScreenGui
+                    local frame = inst:FindFirstAncestorOfClass("Frame")
+                    local top = frame
+                    while top and top.Parent ~= sg and top.Parent and top.Parent:IsA("Frame") do
+                        top = top.Parent
+                    end
+                    return sg, (top or frame)
                 end
             end
         end
     end
 end
 
-local function setMainVisible(state)
-    uiVisible = state
-
-    -- kalau belum ketemu / sudah ke-Destroy, coba cari lagi
-    if (not mainGui) or (not mainGui.Parent) then
-        mainGui = findMainGui()
-    end
-
-    if mainGui then
-        mainGui.Enabled = state
-    else
-        warn("[UI] mainGui belum ketemu, tidak bisa toggle.")
+local function ensureMainUi()
+    if (not mainGui) or (not mainGui.Parent) or (not mainRootFrame) or (not mainRootFrame.Parent) then
+        mainGui, mainRootFrame = findMainUi()
     end
 end
 
--- opsional: pastikan awalnya ON
-task.spawn(function()
-    task.wait(1)
-    mainGui = findMainGui()
-    if mainGui then
-        mainGui.Enabled = true
-        uiVisible = true
+local function setMainVisible(state)
+    uiVisible = state
+    ensureMainUi()
+
+    if mainRootFrame then
+        mainRootFrame.Visible = state
+        print("[UI] mainRootFrame.Visible =", state)
+    elseif mainGui then
+        -- fallback kalau root frame tidak ketemu
+        mainGui.Enabled = state
+        print("[UI] ScreenGui.Enabled =", state)
     else
-        warn("[UI] Belum menemukan ScreenGui WindUI (akan dicari lagi saat klik tombol Neverm1nd).")
+        warn("[UI] Tidak menemukan UI WindUI untuk di-toggle.")
     end
+end
+
+-- biarkan WindUI mengatur visibility awal sendiri
+task.spawn(function()
+    task.wait(1.5)
+    ensureMainUi()
 end)
 
 -----------------------
@@ -458,7 +463,7 @@ local function createNeverm1ndGui(parent)
     return screenGui
 end
 
--- Hapus instance lama Neverm1nd kalau ada
+-- Hapus Neverm1nd lama kalau ada
 local function destroyOldNeverm1nd()
     for _, gui in ipairs(CoreGui:GetChildren()) do
         if gui:IsA("ScreenGui") and gui.Name == "Neverm1nd" then
@@ -478,7 +483,7 @@ end
 
 destroyOldNeverm1nd()
 
--- Tentukan parent yang cocok (gethui atau CoreGui)
+-- Tentukan parent cocok (gethui atau CoreGui)
 local parentForNeverm1nd = CoreGui
 pcall(function()
     if typeof(gethui) == "function" then
@@ -494,7 +499,9 @@ local neverGui = createNeverm1ndGui(parentForNeverm1nd)
 -- Klik tombol Neverm1nd = toggle UI WindUI
 local toggleButton = neverGui:WaitForChild("main"):WaitForChild("togl")
 toggleButton.MouseButton1Click:Connect(function()
-    setMainVisible(not uiVisible)
+    local newState = not uiVisible
+    print("[Neverm1nd] Toggle pressed. Target state:", newState)
+    setMainVisible(newState)
 end)
 
 print("[SuperInstant] Script + Neverm1nd floating button loaded.")
