@@ -201,7 +201,6 @@ local function findMainUi()
             if inst:IsA("TextLabel") and tostring(inst.Text):find("Super Instant AutoFish V2") then
                 local sg = inst:FindFirstAncestorOfClass("ScreenGui")
                 if sg then
-                    -- cari frame teratas di bawah ScreenGui
                     local frame = inst:FindFirstAncestorOfClass("Frame")
                     local top = frame
                     while top and top.Parent ~= sg and top.Parent and top.Parent:IsA("Frame") do
@@ -226,17 +225,13 @@ local function setMainVisible(state)
 
     if mainRootFrame then
         mainRootFrame.Visible = state
-        print("[UI] mainRootFrame.Visible =", state)
     elseif mainGui then
-        -- fallback kalau root frame tidak ketemu
         mainGui.Enabled = state
-        print("[UI] ScreenGui.Enabled =", state)
     else
         warn("[UI] Tidak menemukan UI WindUI untuk di-toggle.")
     end
 end
 
--- biarkan WindUI mengatur visibility awal sendiri
 task.spawn(function()
     task.wait(1.5)
     ensureMainUi()
@@ -336,7 +331,6 @@ local function createNeverm1ndGui(parent)
 
     -- Sistem drag (PC + Mobile)
     local dragging = false
-    local dragInput
     local dragStart
     local startPos
 
@@ -408,16 +402,20 @@ local function createNeverm1ndGui(parent)
         ColorSequenceKeypoint.new(1, Color3.new(0.137255,0.137255,0.137255))
     }
 
-    -- Icon
+    -- Icon Neverm1nd (FULL)
     local ImageLabel6 = Instance.new("ImageLabel", Frame1)
-    ImageLabel6.Size = UDim2.new(0, 35, 0, 35)
-    ImageLabel6.Image = "rbxassetid://100651748260650" -- ganti kalau mau icon lain
-    ImageLabel6.BackgroundTransparency = 1
-    ImageLabel6.Position = UDim2.new(0.181818187, 0, 0.181818187, 0)
-    ImageLabel6.BorderColor3 = Color3.new(0, 0, 0)
     ImageLabel6.Name = "imege"
+    ImageLabel6.BackgroundTransparency = 1
     ImageLabel6.BorderSizePixel = 0
+    ImageLabel6.BorderColor3 = Color3.new(0, 0, 0)
     ImageLabel6.BackgroundColor3 = Color3.new(1, 1, 1)
+
+    ImageLabel6.AnchorPoint = Vector2.new(0.5, 0.5)
+    ImageLabel6.Position    = UDim2.new(0.5, 0, 0.5, 0)
+    ImageLabel6.Size        = UDim2.new(1, 0, 1, 0) -- full seluruh frame
+
+    ImageLabel6.Image     = "rbxassetid://100651748260650"
+    ImageLabel6.ScaleType = Enum.ScaleType.Fit  -- jaga proporsi gambar
 
     -- Tombol transparan untuk klik/toggle
     local TextButton7 = Instance.new("TextButton", Frame1)
@@ -500,7 +498,6 @@ local neverGui = createNeverm1ndGui(parentForNeverm1nd)
 local toggleButton = neverGui:WaitForChild("main"):WaitForChild("togl")
 toggleButton.MouseButton1Click:Connect(function()
     local newState = not uiVisible
-    print("[Neverm1nd] Toggle pressed. Target state:", newState)
     setMainVisible(newState)
 end)
 
