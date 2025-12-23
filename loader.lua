@@ -36,14 +36,14 @@ end
 -- ====================================================================
 --                        CORE SERVICES
 -- ====================================================================
-local Players          = game:GetService("Players")
-local RunService       = game:GetService("RunService")
-local ReplicatedStorage= game:GetService("ReplicatedStorage")
-local HttpService      = game:GetService("HttpService")
-local VirtualUser      = game:GetService("VirtualUser")
-local LocalPlayer      = Players.LocalPlayer
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService       = game:GetService("HttpService")
+local VirtualUser       = game:GetService("VirtualUser")
+local LocalPlayer       = Players.LocalPlayer
 
--- RbxNet package (untuk semua remote)
+-- RbxNet package
 local NetPackage = ReplicatedStorage
     :WaitForChild("Packages")
     :WaitForChild("_Index")
@@ -57,17 +57,17 @@ local CONFIG_FOLDER = "OptimizedAutoFish"
 local CONFIG_FILE   = CONFIG_FOLDER .. "/config_" .. LocalPlayer.UserId .. ".json"
 
 local DefaultConfig = {
-    AutoFish       = false,
-    AutoSell       = false,
-    AutoCatch      = false,
-    GPUSaver       = false,
-    BlatantMode    = false,
-    FishDelay      = 0.9,
-    CatchDelay     = 0.2,
-    SellDelay      = 30,
-    TeleportLocation = "Sisyphus Statue",
-    AutoFavorite   = true,
-    FavoriteRarity = "Mythic"
+    AutoFish        = false,
+    AutoSell        = false,
+    AutoCatch       = false,
+    GPUSaver        = false,
+    BlatantMode     = false,
+    FishDelay       = 0.9,
+    CatchDelay      = 0.2, -- dipakai juga sebagai base delay AutoCatch, tapi akan di-clamp >= 1.2
+    SellDelay       = 30,
+    TeleportLocation= "Sisyphus Statue",
+    AutoFavorite    = true,
+    FavoriteRarity  = "Mythic"
 }
 
 local Config = {}
@@ -189,7 +189,6 @@ function Teleport.to(locationName)
         local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
         local rootPart  = character:FindFirstChild("HumanoidRootPart")
         if not rootPart then return end
-        
         rootPart.CFrame = cframe
         print("✅ [Teleport] Moved to " .. locationName)
     end)
@@ -200,7 +199,7 @@ end
 -- ====================================================================
 --                     GPU SAVER
 -- ====================================================================
-local gpuActive  = false
+local gpuActive   = false
 local whiteScreen = nil
 
 local function enableGPU()
@@ -219,20 +218,20 @@ local function enableGPU()
     whiteScreen.DisplayOrder = 999999
     
     local frame = Instance.new("Frame")
-    frame.Size              = UDim2.new(1, 0, 1, 0)
-    frame.BackgroundColor3  = Color3.new(0.1, 0.1, 0.1)
-    frame.Parent            = whiteScreen
+    frame.Size             = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+    frame.Parent           = whiteScreen
     
     local label = Instance.new("TextLabel")
-    label.Size                 = UDim2.new(0, 400, 0, 100)
-    label.Position             = UDim2.new(0.5, -200, 0.5, -50)
+    label.Size                   = UDim2.new(0, 400, 0, 100)
+    label.Position               = UDim2.new(0.5, -200, 0.5, -50)
     label.BackgroundTransparency = 1
-    label.Text                 = "🟢 GPU SAVER ACTIVE\n\nAuto Fish Running..."
-    label.TextColor3           = Color3.new(0, 1, 0)
-    label.TextSize             = 28
-    label.Font                 = Enum.Font.GothamBold
-    label.TextXAlignment       = Enum.TextXAlignment.Center
-    label.Parent               = frame
+    label.Text                   = "🟢 GPU SAVER ACTIVE\n\nAuto Fish Running..."
+    label.TextColor3             = Color3.new(0, 1, 0)
+    label.TextSize               = 28
+    label.Font                   = Enum.Font.GothamBold
+    label.TextXAlignment         = Enum.TextXAlignment.Center
+    label.Parent                 = frame
     
     whiteScreen.Parent = game.CoreGui
     print("[GPU] GPU Saver enabled")
@@ -302,9 +301,9 @@ local function autoFavoriteByRarity()
         for _, item in ipairs(items) do
             local data = ItemUtility:GetItemData(item.Id)
             if data and data.Data then
-                local itemName   = data.Data.Name or "Unknown"
-                local rarity     = getFishRarity(data)
-                local rarityValue= getRarityValue(rarity)
+                local itemName    = data.Data.Name or "Unknown"
+                local rarity      = getFishRarity(data)
+                local rarityValue = getRarityValue(rarity)
                 
                 if rarityValue >= targetValue and rarityValue >= 6 then
                     if not isItemFavorited(item.UUID) and not favoritedItems[item.UUID] then
@@ -430,8 +429,17 @@ local function fishingLoop()
 end
 
 -- ====================================================================
---                     AUTO CATCH (EVENT BASED)
+--                     AUTO CATCH (EVENT-BASED)
 -- ====================================================================
+local function getAutoCatchDelay()
+    local d = tonumber(Config.CatchDelay) or 0.2
+    -- minimal 1.2 detik (mirip BypassDelayV2 script 2)
+    if d < 1.2 then
+        d = 1.2
+    end
+    return d
+end
+
 local RE_ReplicateTextEffect
 local ok, err = pcall(function()
     RE_ReplicateTextEffect = NetPackage:WaitForChild("RE/ReplicateTextEffect")
@@ -439,7 +447,6 @@ end)
 
 if ok and RE_ReplicateTextEffect then
     RE_ReplicateTextEffect.OnClientEvent:Connect(function(data)
-        -- AutoCatch harus ON
         if not Config.AutoCatch then return end
         if not data or not data.TextData then return end
         if data.TextData.EffectType ~= "Exclaim" then return end
@@ -450,13 +457,15 @@ if ok and RE_ReplicateTextEffect then
         if not head then return end
         if data.Container ~= head then return end
 
-        -- Ikan gigit di karakter kita → spam FishingCompleted
+        -- ikan gigit di kepala kita → tunggu sedikit, lalu spam FishingCompleted
+        local delay = getAutoCatchDelay()
+
         task.spawn(function()
             for i = 1, 3 do
+                task.wait(delay)
                 pcall(function()
                     Events.fishing:FireServer()
                 end)
-                task.wait(Config.CatchDelay)
             end
         end)
     end)
@@ -545,8 +554,8 @@ AutoFishSection:Toggle({
     Content = "Menjalankan loop auto fishing (Normal / Blatant).",
     Value   = Config.AutoFish,
     Callback = function(value)
-        Config.AutoFish = value
-        fishingActive   = value
+        Config.AutoFish   = value
+        fishingActive     = value
         
         if value then
             print("[Auto Fish] 🟢 Started " .. (Config.BlatantMode and "(BLATANT MODE)" or "(Normal)"))
@@ -562,7 +571,7 @@ AutoFishSection:Toggle({
 
 AutoFishSection:Toggle({
     Title   = "Auto Catch (Event Based)",
-    Content = "Otomatis reel saat tanda '!' muncul di kepala.",
+    Content = "Otomatis reel saat tanda '!' muncul di kepala (manual & auto).",
     Value   = Config.AutoCatch,
     Callback = function(value)
         Config.AutoCatch = value
@@ -575,8 +584,8 @@ AutoFishSection:Input({
     Title       = "Fish Delay (detik)",
     Content     = "Delay tunggu ikan menggigit. Default: 0.9 (0.1 - 10)",
     Placeholder = tostring(Config.FishDelay),
-    Callback    = function(value)
-        local num = tonumber(value)
+    Callback    = function(v)
+        local num = tonumber(v)
         if num and num >= 0.1 and num <= 10 then
             Config.FishDelay = num
             print("[Config] ✅ Fish delay set to " .. num .. "s")
@@ -589,10 +598,10 @@ AutoFishSection:Input({
 
 AutoFishSection:Input({
     Title       = "Catch Delay (detik)",
-    Content     = "Jeda antar spam FishingCompleted. Default: 0.2 (0.1 - 10)",
+    Content     = "Dipakai sebagai delay AutoCatch (min 1.2). Default: 0.2.",
     Placeholder = tostring(Config.CatchDelay),
-    Callback    = function(value)
-        local num = tonumber(value)
+    Callback    = function(v)
+        local num = tonumber(v)
         if num and num >= 0.1 and num <= 10 then
             Config.CatchDelay = num
             print("[Config] ✅ Catch delay set to " .. num .. "s")
@@ -623,8 +632,8 @@ SellSection:Input({
     Title       = "Sell Delay (detik)",
     Content     = "Seberapa sering auto sell. Default: 30 (10 - 300).",
     Placeholder = tostring(Config.SellDelay),
-    Callback    = function(value)
-        local num = tonumber(value)
+    Callback    = function(v)
+        local num = tonumber(v)
         if num and num >= 10 and num <= 300 then
             Config.SellDelay = num
             print("[Config] ✅ Sell delay set to " .. num .. "s")
@@ -739,27 +748,13 @@ local InfoSection = InfoTab:Section({
 InfoSection:Paragraph({
     Title = "Fitur",
     Content = [[
-• Auto Fishing cepat dengan BLATANT MODE
+• Auto Fishing (Normal + Blatant)
 • Auto Sell (menjaga ikan yang di-favorite)
-• Auto Catch berbasis event (tanda '!' di kepala)
-• GPU Saver Mode (hemat performa)
-• Anti-AFK Protection
-• Sistem konfigurasi (JSON) per user
-• Sistem Teleport lengkap
-• Auto Favorite Mythic & Secret (pakai remote resmi, aman)
-    ]]
-})
-
-InfoSection:Paragraph({
-    Title = "Penjelasan Blatant Mode",
-    Content = [[
-BLATANT MODE:
-- Cast 2 kali secara paralel (overlap)
-- Tetap menunggu FishDelay untuk ikan menggigit
-- Spam FishingCompleted beberapa kali untuk instant catch
-- Cooldown lebih cepat (CatchDelay * 0.5)
-
-→ Siklus mancing jauh lebih cepat, tapi juga lebih riskan kalau game punya anti-cheat yang ketat.
+• Auto Catch berbasis event (manual & auto)
+• GPU Saver Mode
+• Anti-AFK
+• Teleport lokasi
+• Auto Favorite Mythic & Secret (remote resmi, aman)
     ]]
 })
 
