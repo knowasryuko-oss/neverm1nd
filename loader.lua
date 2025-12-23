@@ -307,7 +307,7 @@ local function createNeverm1ndGui(parent)
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     screenGui.Parent = parent
 
-    -- Frame utama
+    -- Frame utama (border ungu)
     local Frame1 = Instance.new("Frame")
     Frame1.AnchorPoint = Vector2.new(0, 0.5)
     Frame1.Name = "main"
@@ -317,8 +317,45 @@ local function createNeverm1ndGui(parent)
     Frame1.BorderSizePixel = 0
     Frame1.Active = true
     Frame1.Draggable = false
-    Frame1.ClipsDescendants = true   -- penting: anak ikut terpotong sudut
     Frame1.Parent = screenGui
+
+    local UICorner3 = Instance.new("UICorner", Frame1)
+    UICorner3.CornerRadius = UDim.new(0, 15)
+
+    local UIGradient2 = Instance.new("UIGradient", Frame1)
+    UIGradient2.Rotation = 50
+    UIGradient2.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.new(0.643137,0.615686,1)),
+        ColorSequenceKeypoint.new(0.515913, Color3.new(0.117647,0.105882,0.14902)),
+        ColorSequenceKeypoint.new(1, Color3.new(0.643137,0.615686,1))
+    }
+
+    local UIStroke4 = Instance.new("UIStroke", Frame1)
+    UIStroke4.Color = Color3.new(1, 1, 1)
+    UIStroke4.Thickness = 2
+
+    local UIGradient5 = Instance.new("UIGradient", UIStroke4)
+    UIGradient5.Rotation = 90
+    UIGradient5.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.new(0.286275,0.415686,1)),
+        ColorSequenceKeypoint.new(1, Color3.new(0.137255,0.137255,0.137255))
+    }
+
+    -- ICON NEVERM1ND PENUH DI DALAM BORDER
+    local ImageLabel6 = Instance.new("ImageLabel", Frame1)
+    ImageLabel6.Name = "imege"
+    ImageLabel6.BackgroundTransparency = 1
+    ImageLabel6.BorderSizePixel = 0
+    ImageLabel6.AnchorPoint = Vector2.new(0.5, 0.5)
+    ImageLabel6.Position    = UDim2.new(0.5, 0, 0.5, 0)
+    -- sedikit margin 3px tiap sisi agar border/stroke tetap kelihatan
+    ImageLabel6.Size        = UDim2.new(1, -6, 1, -6)
+    ImageLabel6.Image       = "rbxassetid://100651748260650"
+    ImageLabel6.ScaleType   = Enum.ScaleType.Fit
+
+    -- UICorner untuk gambar agar sudutnya ikut membulat
+    local ImageCorner = Instance.new("UICorner", ImageLabel6)
+    ImageCorner.CornerRadius = UDim.new(0, 13) -- sedikit lebih kecil dari 15
 
     -- Drag (PC + Mobile)
     local dragging = false
@@ -365,40 +402,6 @@ local function createNeverm1ndGui(parent)
             update(input)
         end
     end)
-
-    -- Background gradient + border
-    local UIGradient2 = Instance.new("UIGradient", Frame1)
-    UIGradient2.Rotation = 50
-    UIGradient2.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.new(0.643137,0.615686,1)),
-        ColorSequenceKeypoint.new(0.515913, Color3.new(0.117647,0.105882,0.14902)),
-        ColorSequenceKeypoint.new(1, Color3.new(0.643137,0.615686,1))
-    }
-
-    local UICorner3 = Instance.new("UICorner", Frame1)
-    UICorner3.CornerRadius = UDim.new(0, 15)
-
-    local UIStroke4 = Instance.new("UIStroke", Frame1)
-    UIStroke4.Color = Color3.new(1, 1, 1)
-    UIStroke4.Thickness = 2
-
-    local UIGradient5 = Instance.new("UIGradient", UIStroke4)
-    UIGradient5.Rotation = 90
-    UIGradient5.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.new(0.286275,0.415686,1)),
-        ColorSequenceKeypoint.new(1, Color3.new(0.137255,0.137255,0.137255))
-    }
-
-    -- Icon Neverm1nd FULL di dalam border
-    local ImageLabel6 = Instance.new("ImageLabel", Frame1)
-    ImageLabel6.Name = "imege"
-    ImageLabel6.BackgroundTransparency = 1
-    ImageLabel6.BorderSizePixel = 0
-    ImageLabel6.AnchorPoint = Vector2.new(0.5, 0.5)
-    ImageLabel6.Position    = UDim2.new(0.5, 0, 0.5, 0)
-    ImageLabel6.Size        = UDim2.new(1, 0, 1, 0) -- penuh dalam frame
-    ImageLabel6.Image       = "rbxassetid://100651748260650"
-    ImageLabel6.ScaleType   = Enum.ScaleType.Fit     -- rasio tetap, frame yang membatasi sudut
 
     -- Tombol transparan untuk klik/toggle
     local TextButton7 = Instance.new("TextButton", Frame1)
