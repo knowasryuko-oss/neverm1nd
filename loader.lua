@@ -36,37 +36,46 @@ end
 -- ====================================================================
 --                        CORE SERVICES
 -- ====================================================================
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local HttpService = game:GetService("HttpService")
-local VirtualUser = game:GetService("VirtualUser")
-local LocalPlayer = Players.LocalPlayer
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local ReplicatedStorage= game:GetService("ReplicatedStorage")
+local HttpService      = game:GetService("HttpService")
+local VirtualUser      = game:GetService("VirtualUser")
+local LocalPlayer      = Players.LocalPlayer
+
+-- RbxNet package (untuk semua remote)
+local NetPackage = ReplicatedStorage
+    :WaitForChild("Packages")
+    :WaitForChild("_Index")
+    :WaitForChild("sleitnick_net@0.2.0")
+    :WaitForChild("net")
 
 -- ====================================================================
 --                    CONFIGURATION
 -- ====================================================================
 local CONFIG_FOLDER = "OptimizedAutoFish"
-local CONFIG_FILE = CONFIG_FOLDER .. "/config_" .. LocalPlayer.UserId .. ".json"
+local CONFIG_FILE   = CONFIG_FOLDER .. "/config_" .. LocalPlayer.UserId .. ".json"
 
 local DefaultConfig = {
-    AutoFish = false,
-    AutoSell = false,
-    AutoCatch = false,
-    GPUSaver = false,
-    BlatantMode = false,
-    FishDelay = 0.9,
-    CatchDelay = 0.2,
-    SellDelay = 30,
+    AutoFish       = false,
+    AutoSell       = false,
+    AutoCatch      = false,
+    GPUSaver       = false,
+    BlatantMode    = false,
+    FishDelay      = 0.9,
+    CatchDelay     = 0.2,
+    SellDelay      = 30,
     TeleportLocation = "Sisyphus Statue",
-    AutoFavorite = true,
+    AutoFavorite   = true,
     FavoriteRarity = "Mythic"
 }
 
 local Config = {}
 for k, v in pairs(DefaultConfig) do Config[k] = v end
 
--- Teleport Locations (COMPLETE LIST)
+-- ====================================================================
+--                    TELEPORT LOCATIONS
+-- ====================================================================
 local LOCATIONS = {
     ["Spawn"] = CFrame.new(45.2788086, 252.562927, 2987.10913, 1, 0, 0, 0, 1, 0, 0, 0, 1),
     ["Sisyphus Statue"] = CFrame.new(-3728.21606, -135.074417, -1012.12744, -0.977224171, 7.74980258e-09, -0.212209702, 1.566994e-08, 1, -3.5640408e-08, 0.212209702, -3.81539813e-08, -0.977224171),
@@ -120,15 +129,15 @@ loadConfig()
 --                     NETWORK EVENTS
 -- ====================================================================
 local function getNetworkEvents()
-    local net = ReplicatedStorage.Packages._Index["sleitnick_net@0.2.0"].net
+    local net = NetPackage
     return {
-        fishing = net:WaitForChild("RE/FishingCompleted"),
-        sell = net:WaitForChild("RF/SellAllItems"),
-        charge = net:WaitForChild("RF/ChargeFishingRod"),
+        fishing  = net:WaitForChild("RE/FishingCompleted"),
+        sell     = net:WaitForChild("RF/SellAllItems"),
+        charge   = net:WaitForChild("RF/ChargeFishingRod"),
         minigame = net:WaitForChild("RF/RequestFishingMinigameStarted"),
-        cancel = net:WaitForChild("RF/CancelFishingInputs"),
-        equip = net:WaitForChild("RE/EquipToolFromHotbar"),
-        unequip = net:WaitForChild("RE/UnequipToolFromHotbar"),
+        cancel   = net:WaitForChild("RF/CancelFishingInputs"),
+        equip    = net:WaitForChild("RE/EquipToolFromHotbar"),
+        unequip  = net:WaitForChild("RE/UnequipToolFromHotbar"),
         favorite = net:WaitForChild("RE/FavoriteItem")
     }
 end
@@ -139,20 +148,20 @@ local Events = getNetworkEvents()
 --                     MODULES FOR AUTO FAVORITE
 -- ====================================================================
 local ItemUtility = require(ReplicatedStorage.Shared.ItemUtility)
-local Replion = require(ReplicatedStorage.Packages.Replion)
-local PlayerData = Replion.Client:WaitReplion("Data")
+local Replion     = require(ReplicatedStorage.Packages.Replion)
+local PlayerData  = Replion.Client:WaitReplion("Data")
 
 -- ====================================================================
 --                     RARITY SYSTEM
 -- ====================================================================
 local RarityTiers = {
-    Common = 1,
-    Uncommon = 2,
-    Rare = 3,
-    Epic = 4,
+    Common    = 1,
+    Uncommon  = 2,
+    Rare      = 3,
+    Epic      = 4,
     Legendary = 5,
-    Mythic = 6,
-    Secret = 7
+    Mythic    = 6,
+    Secret    = 7
 }
 
 local function getRarityValue(rarity)
@@ -177,10 +186,8 @@ function Teleport.to(locationName)
     end
     
     local success = pcall(function()
-        local character = LocalPlayer.Character
-        if not character then return end
-        
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+        local rootPart  = character:FindFirstChild("HumanoidRootPart")
         if not rootPart then return end
         
         rootPart.CFrame = cframe
@@ -193,7 +200,7 @@ end
 -- ====================================================================
 --                     GPU SAVER
 -- ====================================================================
-local gpuActive = false
+local gpuActive  = false
 local whiteScreen = nil
 
 local function enableGPU()
@@ -202,8 +209,8 @@ local function enableGPU()
     
     pcall(function()
         settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-        game.Lighting.GlobalShadows = false
-        game.Lighting.FogEnd = 1
+        game.Lighting.GlobalShadows       = false
+        game.Lighting.FogEnd              = 1
         if setfpscap then setfpscap(8) end
     end)
     
@@ -212,20 +219,20 @@ local function enableGPU()
     whiteScreen.DisplayOrder = 999999
     
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, 0, 1, 0)
-    frame.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
-    frame.Parent = whiteScreen
+    frame.Size              = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundColor3  = Color3.new(0.1, 0.1, 0.1)
+    frame.Parent            = whiteScreen
     
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 400, 0, 100)
-    label.Position = UDim2.new(0.5, -200, 0.5, -50)
+    label.Size                 = UDim2.new(0, 400, 0, 100)
+    label.Position             = UDim2.new(0.5, -200, 0.5, -50)
     label.BackgroundTransparency = 1
-    label.Text = "🟢 GPU SAVER ACTIVE\n\nAuto Fish Running..."
-    label.TextColor3 = Color3.new(0, 1, 0)
-    label.TextSize = 28
-    label.Font = Enum.Font.GothamBold
-    label.TextXAlignment = Enum.TextXAlignment.Center
-    label.Parent = frame
+    label.Text                 = "🟢 GPU SAVER ACTIVE\n\nAuto Fish Running..."
+    label.TextColor3           = Color3.new(0, 1, 0)
+    label.TextSize             = 28
+    label.Font                 = Enum.Font.GothamBold
+    label.TextXAlignment       = Enum.TextXAlignment.Center
+    label.Parent               = frame
     
     whiteScreen.Parent = game.CoreGui
     print("[GPU] GPU Saver enabled")
@@ -237,8 +244,8 @@ local function disableGPU()
     
     pcall(function()
         settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
-        game.Lighting.GlobalShadows = true
-        game.Lighting.FogEnd = 100000
+        game.Lighting.GlobalShadows       = true
+        game.Lighting.FogEnd              = 100000
         if setfpscap then setfpscap(0) end
     end)
     
@@ -281,25 +288,23 @@ local function autoFavoriteByRarity()
     if not Config.AutoFavorite then return end
     
     local targetRarity = Config.FavoriteRarity
-    local targetValue = getRarityValue(targetRarity)
-    
+    local targetValue  = getRarityValue(targetRarity)
     if targetValue < 6 then
         targetValue = 6
     end
     
     local favorited = 0
     
-    local success = pcall(function()
+    pcall(function()
         local items = PlayerData:GetExpect("Inventory").Items
-        
         if not items or #items == 0 then return end
         
         for _, item in ipairs(items) do
             local data = ItemUtility:GetItemData(item.Id)
             if data and data.Data then
-                local itemName = data.Data.Name or "Unknown"
-                local rarity = getFishRarity(data)
-                local rarityValue = getRarityValue(rarity)
+                local itemName   = data.Data.Name or "Unknown"
+                local rarity     = getFishRarity(data)
+                local rarityValue= getRarityValue(rarity)
                 
                 if rarityValue >= targetValue and rarityValue >= 6 then
                     if not isItemFavorited(item.UUID) and not favoritedItems[item.UUID] then
@@ -331,7 +336,7 @@ end)
 -- ====================================================================
 --                     FISHING LOGIC
 -- ====================================================================
-local isFishing = false
+local isFishing     = false
 local fishingActive = false
 
 local function castRod()
@@ -425,18 +430,39 @@ local function fishingLoop()
 end
 
 -- ====================================================================
---                     AUTO CATCH
+--                     AUTO CATCH (EVENT BASED)
 -- ====================================================================
-task.spawn(function()
-    while true do
-        if Config.AutoCatch and not isFishing then
-            pcall(function() 
-                Events.fishing:FireServer() 
-            end)
-        end
-        task.wait(Config.CatchDelay)
-    end
+local RE_ReplicateTextEffect
+local ok, err = pcall(function()
+    RE_ReplicateTextEffect = NetPackage:WaitForChild("RE/ReplicateTextEffect")
 end)
+
+if ok and RE_ReplicateTextEffect then
+    RE_ReplicateTextEffect.OnClientEvent:Connect(function(data)
+        -- AutoCatch harus ON
+        if not Config.AutoCatch then return end
+        if not data or not data.TextData then return end
+        if data.TextData.EffectType ~= "Exclaim" then return end
+
+        local char = LocalPlayer.Character
+        if not char then return end
+        local head = char:FindFirstChild("Head")
+        if not head then return end
+        if data.Container ~= head then return end
+
+        -- Ikan gigit di karakter kita → spam FishingCompleted
+        task.spawn(function()
+            for i = 1, 3 do
+                pcall(function()
+                    Events.fishing:FireServer()
+                end)
+                task.wait(Config.CatchDelay)
+            end
+        end)
+    end)
+else
+    warn("[AutoCatch] Tidak menemukan RE/ReplicateTextEffect:", err)
+end
 
 -- ====================================================================
 --                     AUTO SELL
@@ -470,7 +496,6 @@ end)
 -- ====================================================================
 --                     WINDUI UI
 -- ====================================================================
-
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 local Window = WindUI:CreateWindow({
@@ -521,7 +546,7 @@ AutoFishSection:Toggle({
     Value   = Config.AutoFish,
     Callback = function(value)
         Config.AutoFish = value
-        fishingActive = value
+        fishingActive   = value
         
         if value then
             print("[Auto Fish] 🟢 Started " .. (Config.BlatantMode and "(BLATANT MODE)" or "(Normal)"))
@@ -536,8 +561,8 @@ AutoFishSection:Toggle({
 })
 
 AutoFishSection:Toggle({
-    Title   = "Auto Catch (Extra Speed)",
-    Content = "Spam FishingCompleted untuk mempercepat tangkapan.",
+    Title   = "Auto Catch (Event Based)",
+    Content = "Otomatis reel saat tanda '!' muncul di kepala.",
     Value   = Config.AutoCatch,
     Callback = function(value)
         Config.AutoCatch = value
@@ -564,7 +589,7 @@ AutoFishSection:Input({
 
 AutoFishSection:Input({
     Title       = "Catch Delay (detik)",
-    Content     = "Delay antar reel / auto catch. Default: 0.2 (0.1 - 10)",
+    Content     = "Jeda antar spam FishingCompleted. Default: 0.2 (0.1 - 10)",
     Placeholder = tostring(Config.CatchDelay),
     Callback    = function(value)
         local num = tonumber(value)
@@ -715,8 +740,8 @@ InfoSection:Paragraph({
     Title = "Fitur",
     Content = [[
 • Auto Fishing cepat dengan BLATANT MODE
-• Auto Sell sederhana (menjaga ikan yang di-favorite)
-• Auto Catch (spam catch untuk ekstra speed)
+• Auto Sell (menjaga ikan yang di-favorite)
+• Auto Catch berbasis event (tanda '!' di kepala)
 • GPU Saver Mode (hemat performa)
 • Anti-AFK Protection
 • Sistem konfigurasi (JSON) per user
