@@ -402,7 +402,7 @@ local function createNeverm1ndGui(parent)
         ColorSequenceKeypoint.new(1, Color3.new(0.137255,0.137255,0.137255))
     }
 
-    -- Icon Neverm1nd (FULL)
+    -- Icon Neverm1nd (diperbesar + crop supaya penuh)
     local ImageLabel6 = Instance.new("ImageLabel", Frame1)
     ImageLabel6.Name = "imege"
     ImageLabel6.BackgroundTransparency = 1
@@ -412,10 +412,11 @@ local function createNeverm1ndGui(parent)
 
     ImageLabel6.AnchorPoint = Vector2.new(0.5, 0.5)
     ImageLabel6.Position    = UDim2.new(0.5, 0, 0.5, 0)
-    ImageLabel6.Size        = UDim2.new(1, 0, 1, 0) -- full seluruh frame
+    -- diperbesar 1.4x lalu di-crop oleh frame (hampir tidak ada border ungu)
+    ImageLabel6.Size        = UDim2.new(1.4, 0, 1.4, 0)
 
     ImageLabel6.Image     = "rbxassetid://100651748260650"
-    ImageLabel6.ScaleType = Enum.ScaleType.Fit  -- jaga proporsi gambar
+    ImageLabel6.ScaleType = Enum.ScaleType.Crop  -- zoom & crop agar penuh
 
     -- Tombol transparan untuk klik/toggle
     local TextButton7 = Instance.new("TextButton", Frame1)
