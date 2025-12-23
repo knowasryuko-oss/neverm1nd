@@ -1,5 +1,5 @@
 -- =========================================================
--- AUTO FISHING MODE • SUPER INSTANT (FLOW ATOMIC, V3)
+-- AUTO FISHING MODE • SUPER INSTANT (FLOW ATOMIC + BYPASS DELAY + STOP ANIM)
 -- =========================================================
 
 -----------------------
@@ -46,6 +46,7 @@ local Config = {
     RandomizeDelay   = false, -- acak sedikit SlowReel & SuperInstant
     BurstCount       = 3,     -- FishingCompleted per '!'-event
     BurstGap         = 0.03,  -- jeda antar FishingCompleted di burst
+    BypassDelayV2    = nil,   -- jika diisi angka, override SlowReel
 }
 
 -----------------------
@@ -60,6 +61,16 @@ end)
 -- DELAY HELPERS
 -----------------------
 local function getSlowReel()
+    -- Prioritas: BypassDelayV2 kalau diisi
+    if Config.BypassDelayV2 then
+        local v = tonumber(Config.BypassDelayV2)
+        if v then
+            if v < 0.05 then v = 0.05 end
+            if v > 10   then v = 10   end
+            return v
+        end
+    end
+
     local base = tonumber(Config.SlowReel) or 1.7
     if base < 0.1 then base = 0.1 end
     if base > 10  then base = 10  end
@@ -83,6 +94,27 @@ local function getSuperInstant()
         if base < 0.001 then base = 0.001 end
     end
     return base
+end
+
+-----------------------
+-- HENTIKAN ANIMASI PANCING (GENERIC)
+-----------------------
+local function StopRodAnimations()
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+
+    for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
+        local anim = track.Animation
+        local name = anim and anim.Name or ""
+        name = string.lower(name)
+
+        if name:find("rod") or name:find("fish") or name:find("reel") then
+            track:Stop()
+        end
+    end
 end
 
 -----------------------
@@ -205,7 +237,7 @@ local function StartAutoFishing()
     task.spawn(function()
         while Auto.running do
             pcall(function()
-                -- 1) CancelFishingInputs (pastikan state bersih)
+                -- 1) CancelFishingInputs (pastikan state bersih di awal siklus)
                 pcall(function()
                     Events.cancelInputs:InvokeServer()
                 end)
@@ -250,7 +282,10 @@ local function StartAutoFishing()
                     task.wait(Config.BurstGap or 0.03)
                 end
 
-                -- 7) SlowReel sebelum siklus berikut
+                -- 7) Stop animasi pancing yang masih jalan (visual)
+                StopRodAnimations()
+
+                -- 8) SlowReel sebelum siklus berikut
                 task.wait(getSlowReel())
             end)
 
@@ -269,6 +304,9 @@ local function StopAutoFishing()
     pcall(function()
         Events.cancelInputs:InvokeServer()
     end)
+
+    -- Pastikan animasi pancing berhenti saat dimatikan
+    StopRodAnimations()
 end
 
 -----------------------
@@ -280,7 +318,7 @@ local Window = WindUI:CreateWindow({
     Title  = "Auto Fishing Mode • Super Instant",
     Icon   = "fish",
     Author = "by YOU",
-    Folder = "AtomicRebuild_FinalV3",
+    Folder = "AtomicRebuild_BypassDelay",
     Size   = UDim2.fromOffset(500, 340),
     Theme  = "Indigo",
     KeySystem = false
@@ -289,7 +327,7 @@ local Window = WindUI:CreateWindow({
 WindUI:SetNotificationLower(true)
 WindUI:Notify({
     Title   = "Loaded",
-    Content = "Rebuild Atomic-Style Auto Fishing V3 siap.\nEquip pancing dulu manual.",
+    Content = "Rebuild Atomic-Style Auto Fishing V3 + BypassDelay siap.\nEquip pancing dulu manual.",
     Duration= 6,
     Icon    = "circle-check"
 })
@@ -397,7 +435,7 @@ AutoSection:Toggle({
 
 AutoSection:Input({
     Title       = "Slow Reel Threshold (detik)",
-    Content     = "Jeda antar cast (0.1 - 10).",
+    Content     = "Jeda antar cast (0.1 - 10). Abaikan jika Bypass Delay terisi.",
     Placeholder = tostring(Config.SlowReel),
     Callback    = function(v)
         local n = tonumber(v)
@@ -431,6 +469,26 @@ AutoSection:Toggle({
     Value   = Config.RandomizeDelay,
     Callback = function(v)
         Config.RandomizeDelay = v
+    end
+})
+
+AutoSection:Input({
+    Title       = "Bypass Delay (V2)",
+    Content     = "Override SlowReel (0.05 - 10). Kosongkan untuk pakai SlowReel biasa.",
+    Placeholder = "Contoh: 0.55",
+    Callback    = function(v)
+        if v == nil or v == "" then
+            Config.BypassDelayV2 = nil
+            print("[Config] BypassDelayV2 disabled (pakai SlowReel normal).")
+            return
+        end
+        local n = tonumber(v)
+        if n and n >= 0.05 and n <= 10 then
+            Config.BypassDelayV2 = n
+            print("[Config] BypassDelayV2 =", n)
+        else
+            warn("[Config] Invalid BypassDelayV2 (0.05-10)")
+        end
     end
 })
 
@@ -607,4 +665,4 @@ toggleButton.MouseButton1Click:Connect(function()
     setMainVisible(not uiVisible)
 end)
 
-print("[AtomicRebuild_FinalV3] Script loaded.")
+print("[AtomicRebuild_FinalV3 + BypassDelay] Script loaded.")
