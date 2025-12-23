@@ -411,7 +411,7 @@ local function createNeverm1ndGui(parent)
     -- Icon
     local ImageLabel6 = Instance.new("ImageLabel", Frame1)
     ImageLabel6.Size = UDim2.new(0, 35, 0, 35)
-    ImageLabel6.Image = "rbxassetid://104695336294005" -- ganti kalau mau icon lain
+    ImageLabel6.Image = "rbxassetid://100651748260650" -- ganti kalau mau icon lain
     ImageLabel6.BackgroundTransparency = 1
     ImageLabel6.Position = UDim2.new(0.181818187, 0, 0.181818187, 0)
     ImageLabel6.BorderColor3 = Color3.new(0, 0, 0)
