@@ -41,12 +41,11 @@ local Events = {
 local Config = {
     AutoFishing      = false, -- toggle utama
     RandomizeResults = false, -- ON: posisi minigame acak; OFF: dekat perfect
-    SlowReel         = 1.7,   -- "Slow Reel Threshold" (detik)
-    SuperInstant     = 1.0,   -- "Super Instant Delay" (detik)
+    SlowReel         = 1.7,   -- Slow Reel Threshold (detik)
+    SuperInstant     = 1.0,   -- Super Instant Delay (detik)
     RandomizeDelay   = false, -- acak sedikit SlowReel & SuperInstant (±30%)
     BurstCount       = 3,     -- FishingCompleted per '!'-event
     BurstGap         = 0.03,  -- jeda antar FishingCompleted di burst
-    HideMinigameUI   = true,  -- sembunyikan bar tap-tap (client-only)
 }
 
 -----------------------
@@ -87,38 +86,62 @@ local function getSuperInstant()
 end
 
 -----------------------
--- HIDE MINIGAME UI (CLIENT-SIDE)
+-- HIDE MINIGAME UI (SELALU AKTIF, TANPA TOGGLE)
 -----------------------
-local function hideOne(inst)
-    if not Config.HideMinigameUI then return end
-    if not (inst:IsA("TextLabel") or inst:IsA("TextButton")) then return end
+local function hardHideMinigameGui()
+    local roots = {}
 
-    local txt = tostring(inst.Text or "")
-    if txt == "" then return end
+    table.insert(roots, CoreGui)
 
-    if txt:find("Klik Cepat") or txt:find("Click Fast") or txt:find("Klik untuk Lempar") then
-        local frame = inst:FindFirstAncestorOfClass("Frame")
-        if frame then frame.Visible = false end
-        local sg = inst:FindFirstAncestorOfClass("ScreenGui")
-        if sg then sg.Enabled = false end
-    end
-end
-
-local function setupHideMinigame()
-    local function hookRoot(root)
-        if not root then return end
-        for _, inst in ipairs(root:GetDescendants()) do
-            hideOne(inst)
-        end
-        root.DescendantAdded:Connect(hideOne)
-    end
-
-    hookRoot(CoreGui)
     local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-    if pg then hookRoot(pg) end
+    if pg then table.insert(roots, pg) end
+
+    pcall(function()
+        if typeof(gethui) == "function" then
+            local hui = gethui()
+            if typeof(hui) == "Instance" then
+                table.insert(roots, hui)
+            end
+        end
+    end)
+
+    for _, root in ipairs(roots) do
+        for _, inst in ipairs(root:GetDescendants()) do
+            if inst:IsA("TextLabel") or inst:IsA("TextButton") then
+                local txt = tostring(inst.Text or "")
+                if txt ~= "" and (
+                    txt:find("Klik Cepat") or
+                    txt:find("Click Fast") or
+                    txt:find("Klik untuk Lempar")
+                ) then
+                    -- matikan semua frame di atas label ini
+                    local frame = inst:FindFirstAncestorOfClass("Frame")
+                    while frame do
+                        frame.Visible = false
+                        if frame.Parent and frame.Parent:IsA("Frame") then
+                            frame = frame.Parent
+                        else
+                            frame = nil
+                        end
+                    end
+
+                    -- matikan ScreenGui tempat dia berada
+                    local sg = inst:FindFirstAncestorOfClass("ScreenGui")
+                    if sg then
+                        sg.Enabled = false
+                    end
+                end
+            end
+        end
+    end
 end
 
-setupHideMinigame()
+task.spawn(function()
+    while true do
+        pcall(hardHideMinigameGui)
+        task.wait(0.03)
+    end
+end)
 
 -----------------------
 -- INIT ala Atomic (sekali saat script load)
@@ -139,7 +162,7 @@ task.spawn(function()
         Events.unequipOxy:InvokeServer()
     end)
 
-    -- Matikan radar fishing (opsional safety)
+    -- Matikan radar fishing
     pcall(function()
         Events.updateRadar:InvokeServer(false)
     end)
@@ -167,10 +190,10 @@ local function StartAutoFishing()
                     Events.cancelInputs:InvokeServer()
                 end)
 
-                -- 2) ChargeFishingRod x2 (hold + release)
+                -- 2) ChargeFishingRod x2 (hold & release)
                 local t1 = workspace:GetServerTimeNow()
                 Events.charge:InvokeServer(nil, nil, nil, t1)
-                task.wait(0.25) -- durasi hold, tweak kalau perlu
+                task.wait(0.25) -- durasi hold (tweak kalau perlu)
 
                 local t2 = workspace:GetServerTimeNow()
                 Events.charge:InvokeServer(nil, nil, nil, t2)
@@ -236,7 +259,7 @@ Events.textEffect.OnClientEvent:Connect(function(data)
 end)
 
 -- =========================================================
--- WINDUI WINDOW
+-- WINDUI WINDOW (UI mirip Atomic: 4 kontrol utama)
 -- =========================================================
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
@@ -244,7 +267,7 @@ local Window = WindUI:CreateWindow({
     Title  = "Auto Fishing Mode • Super Instant",
     Icon   = "fish",
     Author = "by YOU",
-    Folder = "AtomicRebuild_Final",
+    Folder = "AtomicRebuild_NoHideToggle",
     Size   = UDim2.fromOffset(500, 340),
     Theme  = "Indigo",
     KeySystem = false
@@ -259,7 +282,7 @@ WindUI:Notify({
 })
 
 -----------------------
--- FIND MAIN UI UNTUK TOGGLE
+-- FIND MAIN UI UNTUK TOGGLE (NEVERM1ND)
 -----------------------
 local mainGui
 local mainRootFrame
@@ -283,7 +306,7 @@ local function findMainUi()
 
     for _, root in ipairs(roots) do
         for _, inst in ipairs(root:GetDescendants()) do
-            if inst:IsA("TextLabel") and tostring(inst.Text):find("Auto Fishing Mode") then
+            if inst:IsA("TextLabel") and tostring(inst.Text):find("Auto Fishing Mode • Super Instant") then
                 local sg = inst:FindFirstAncestorOfClass("ScreenGui")
                 if sg then
                     local frame = inst:FindFirstAncestorOfClass("Frame")
@@ -376,7 +399,7 @@ AutoSection:Input({
 
 AutoSection:Input({
     Title       = "Super Instant Delay (detik)",
-    Content     = "Jeda setelah tanda '!' sebelum FishingCompleted burst (0.001 - 10).",
+    Content     = "Jeda setelah '!' sebelum FishingCompleted burst (0.001 - 10).",
     Placeholder = tostring(Config.SuperInstant),
     Callback    = function(v)
         local n = tonumber(v)
@@ -395,15 +418,6 @@ AutoSection:Toggle({
     Value   = Config.RandomizeDelay,
     Callback = function(v)
         Config.RandomizeDelay = v
-    end
-})
-
-AutoSection:Toggle({
-    Title   = "Hide Minigame UI",
-    Content = "Sembunyikan bar 'Klik Cepat!' di layar (visual).",
-    Value   = Config.HideMinigameUI,
-    Callback = function(v)
-        Config.HideMinigameUI = v
     end
 })
 
@@ -465,7 +479,6 @@ local function createNeverm1ndGui(parent)
     local ImageCorner = Instance.new("UICorner", ImageLabel6)
     ImageCorner.CornerRadius = UDim.new(0, 13)
 
-    -- drag
     local dragging = false
     local dragStart
     local startPos
@@ -581,4 +594,4 @@ toggleButton.MouseButton1Click:Connect(function()
     setMainVisible(not uiVisible)
 end)
 
-print("[AtomicRebuild_Final] Script loaded.")
+print("[AtomicRebuild_NoHideToggle] Script loaded.")
