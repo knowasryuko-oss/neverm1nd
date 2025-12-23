@@ -1,14 +1,13 @@
 -- =========================================================
--- SUPER INSTANT AUTOFISH V2 (VERSI RINGAN + WINDUI)
+-- SUPER INSTANT AUTOFISH V2 (TANPA ANIMASI, 1 TOGGLE)
 -- =========================================================
 
--- Layanan dasar
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser       = game:GetService("VirtualUser")
 local LocalPlayer       = Players.LocalPlayer
 
--- Paket net
+-- RbxNet
 local net = ReplicatedStorage
     :WaitForChild("Packages")
     :WaitForChild("_Index")
@@ -25,48 +24,24 @@ local Events = {
 }
 local updateAuto = net:FindFirstChild("RF/UpdateAutoFishingState")
 
--- Konfigurasi sederhana (hanya di RAM, tidak disimpan ke file)
+-- ===== KONFIGURASI SEDERHANA (di RAM saja) =====
 local Config = {
-    AutoFish    = false, -- Super Instant toggle
+    AutoFish    = false,  -- Super Instant toggle
     PerfectCast = true,
-    FishDelay   = 1.5,   -- Slow Reel Threshold (detik) -> kamu atur manual
-    CatchDelay  = 1.0,   -- Super Instant Delay (detik)  -> kamu atur manual
+    FishDelay   = 1.5,    -- Slow Reel Threshold (detik)
+    CatchDelay  = 1.0,    -- Super Instant Delay (detik)
 }
 
--- Anti-AFK sederhana
+-- ===== ANTI AFK =====
 LocalPlayer.Idled:Connect(function()
     VirtualUser:CaptureController()
     VirtualUser:ClickButton2(Vector2.new())
 end)
 
--- =========================================================
--- ANIMASI (sama seperti script lain)
--- =========================================================
-local AnimFolder  = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Animations")
-local RodIdle     = AnimFolder:WaitForChild("FishingRodReelIdle")
-local RodReel     = AnimFolder:WaitForChild("EasyFishReelStart")
-local RodShake    = AnimFolder:WaitForChild("CastFromFullChargePosition1Hand")
-
-local function getAnimator()
-    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local hum  = char:WaitForChild("Humanoid")
-    local anim = hum:FindFirstChildOfClass("Animator")
-    if not anim then anim = Instance.new("Animator", hum) end
-    return anim
-end
-
-local animator     = getAnimator()
-local RodShakeAnim = animator:LoadAnimation(RodShake)
-local RodIdleAnim  = animator:LoadAnimation(RodIdle)
-local RodReelAnim  = animator:LoadAnimation(RodReel)
-
--- =========================================================
--- LOGIC AUTOFISH V2 + SUPPER INSTANT AUTOCATCH
--- =========================================================
+-- ===== LOGIC AUTOFISH V2 + SUPPER INSTANT =====
 local AutoV2 = {
-    running     = false,
-    autoCatch   = false,
-    perfectCast = true
+    running   = false,
+    autoCatch = false,    -- selalu ikut AutoFish
 }
 
 local function getSlowReelDelay()
@@ -83,9 +58,8 @@ end
 
 local function StartAutoFishV2()
     if AutoV2.running then return end
-    AutoV2.running     = true
-    AutoV2.autoCatch   = true       -- selalu ON bersama toggle
-    AutoV2.perfectCast = Config.PerfectCast
+    AutoV2.running   = true
+    AutoV2.autoCatch = true
 
     pcall(function()
         if updateAuto then updateAuto:InvokeServer(true) end
@@ -98,18 +72,18 @@ local function StartAutoFishV2()
                 Events.equip:FireServer(1)
                 task.wait(0.1)
 
-                -- charge (script lain pakai server time)
+                -- charge pertama (waktu server)
                 Events.charge:InvokeServer(workspace:GetServerTimeNow())
                 task.wait(0.5)
 
+                -- charge kedua + timestamp (mirip script lain)
                 local timestamp = workspace:GetServerTimeNow()
-                RodShakeAnim:Play()
                 Events.charge:InvokeServer(timestamp)
 
                 -- posisi minigame
                 local baseX, baseY = -0.7499996423721313, 1
                 local x, y
-                if AutoV2.perfectCast then
+                if Config.PerfectCast then
                     x = baseX + (math.random(-500,500)/1e7)
                     y = baseY + (math.random(-500,500)/1e7)
                 else
@@ -117,9 +91,9 @@ local function StartAutoFishV2()
                     y = math.random(0,1000)/1000
                 end
 
-                RodIdleAnim:Play()
                 Events.minigame:InvokeServer(x, y)
 
+                -- tunggu SlowReelThreshold
                 task.wait(getSlowReelDelay())
             end)
             task.wait(0.02)
@@ -130,19 +104,17 @@ end
 local function StopAutoFishV2()
     AutoV2.running   = false
     AutoV2.autoCatch = false
+
     pcall(function()
         if updateAuto then updateAuto:InvokeServer(false) end
     end)
-    RodIdleAnim:Stop()
-    RodShakeAnim:Stop()
-    RodReelAnim:Stop()
 end
 
--- AUTOCATCH SUPER INSTANT (event-based)
+-- ===== AUTOCATCH SUPER INSTANT (event-based) =====
 Events.textEffect.OnClientEvent:Connect(function(data)
     if not AutoV2.autoCatch then return end
     if not data or not data.TextData then return end
-    if data.TextData.EffectType ~= "Exclaim" then return end
+    if data.TextData.EffectType ~= "Exclaim" then return end  -- tanda '!'
 
     local char = LocalPlayer.Character
     if not char then return end
@@ -162,7 +134,7 @@ Events.textEffect.OnClientEvent:Connect(function(data)
 end)
 
 -- =========================================================
--- WINDUI UI (SANGAT SEDERHANA)
+-- WINDUI UI SEDERHANA
 -- =========================================================
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
@@ -196,61 +168,11 @@ local AutoFishSection = MainTab:Section({
     Icon  = "fish"
 })
 
--- SATU TOGGLE: AutoFish V2 + AutoCatch
+-- 1 TOGGLE: AutoFish V2 + AutoCatch
 AutoFishSection:Toggle({
     Title   = "Super Instant Auto Fish",
     Content = "Auto Fish V2 + AutoCatch event-based (tanda '!')",
     Value   = Config.AutoFish,
     Callback = function(v)
-        Config.AutoFish  = v
+        Config.AutoFish = v
         if v then
-            StartAutoFishV2()
-            print("[SuperInstant] ON")
-        else
-            StopAutoFishV2()
-            print("[SuperInstant] OFF")
-        end
-    end
-})
-
-AutoFishSection:Toggle({
-    Title   = "Perfect Cast",
-    Content = "ON = posisi cast mendekati perfect. OFF = random.",
-    Value   = Config.PerfectCast,
-    Callback = function(v)
-        Config.PerfectCast = v
-        AutoV2.perfectCast = v
-    end
-})
-
-AutoFishSection:Input({
-    Title       = "Slow Reel Threshold (detik)",
-    Content     = "Jeda tunggu setelah lempar. Bebas atur (0.1 - 10).",
-    Placeholder = tostring(Config.FishDelay),
-    Callback    = function(v)
-        local n = tonumber(v)
-        if n and n >= 0.1 and n <= 10 then
-            Config.FishDelay = n
-            print("[Config] SlowReel =", n)
-        else
-            warn("[Config] Invalid SlowReel (0.1-10)")
-        end
-    end
-})
-
-AutoFishSection:Input({
-    Title       = "Super Instant Delay (detik)",
-    Content     = "Jeda setelah tanda '!' sebelum reel. Bebas atur (0.05 - 10).",
-    Placeholder = tostring(Config.CatchDelay),
-    Callback    = function(v)
-        local n = tonumber(v)
-        if n and n >= 0.05 and n <= 10 then
-            Config.CatchDelay = n
-            print("[Config] SuperInstantDelay =", n)
-        else
-            warn("[Config] Invalid SuperInstantDelay (0.05-10)")
-        end
-    end
-})
-
-print("[SuperInstant] Script loaded.")
