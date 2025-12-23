@@ -1,6 +1,5 @@
 -- ====================================================================
---                 AUTO FISH V4.0 - WINDUI EDITION
---          Based on Working test.lua Fishing Method
+--                 AUTO FISH V4.0 - WINDUI EDITION (REVISI)
 -- ====================================================================
 
 -- ====== CRITICAL DEPENDENCY VALIDATION ======
@@ -57,17 +56,17 @@ local CONFIG_FOLDER = "OptimizedAutoFish"
 local CONFIG_FILE   = CONFIG_FOLDER .. "/config_" .. LocalPlayer.UserId .. ".json"
 
 local DefaultConfig = {
-    AutoFish        = false,
-    AutoSell        = false,
-    AutoCatch       = false,
-    GPUSaver        = false,
-    BlatantMode     = false,
-    FishDelay       = 0.9,
-    CatchDelay      = 0.2, -- dipakai juga sebagai base delay AutoCatch, tapi akan di-clamp >= 1.2
-    SellDelay       = 30,
-    TeleportLocation= "Sisyphus Statue",
-    AutoFavorite    = true,
-    FavoriteRarity  = "Mythic"
+    AutoFish         = false,
+    AutoSell         = false,
+    AutoCatch        = false,
+    GPUSaver         = false,
+    BlatantMode      = false,
+    FishDelay        = 1.9, -- Slow Reel Threshold default
+    CatchDelay       = 1.0, -- Super Instant Delay default
+    SellDelay        = 30,
+    TeleportLocation = "Sisyphus Statue",
+    AutoFavorite     = true,
+    FavoriteRarity   = "Mythic"
 }
 
 local Config = {}
@@ -131,14 +130,15 @@ loadConfig()
 local function getNetworkEvents()
     local net = NetPackage
     return {
-        fishing  = net:WaitForChild("RE/FishingCompleted"),
-        sell     = net:WaitForChild("RF/SellAllItems"),
-        charge   = net:WaitForChild("RF/ChargeFishingRod"),
-        minigame = net:WaitForChild("RF/RequestFishingMinigameStarted"),
-        cancel   = net:WaitForChild("RF/CancelFishingInputs"),
-        equip    = net:WaitForChild("RE/EquipToolFromHotbar"),
-        unequip  = net:WaitForChild("RE/UnequipToolFromHotbar"),
-        favorite = net:WaitForChild("RE/FavoriteItem")
+        fishing    = net:WaitForChild("RE/FishingCompleted"),
+        sell       = net:WaitForChild("RF/SellAllItems"),
+        charge     = net:WaitForChild("RF/ChargeFishingRod"),
+        minigame   = net:WaitForChild("RF/RequestFishingMinigameStarted"),
+        cancel     = net:WaitForChild("RF/CancelFishingInputs"),
+        equip      = net:WaitForChild("RE/EquipToolFromHotbar"),
+        unequip    = net:WaitForChild("RE/UnequipToolFromHotbar"),
+        favorite   = net:WaitForChild("RE/FavoriteItem"),
+        updateAuto = net:WaitForChild("RF/UpdateAutoFishingState") -- baru
     }
 end
 
@@ -342,9 +342,16 @@ local function castRod()
     pcall(function()
         Events.equip:FireServer(1)
         task.wait(0.05)
-        Events.charge:InvokeServer(1755848498.4834)
+
+        -- Versi sederhana, hanya pakai argumen ke-4 (timestamp)
+        Events.charge:InvokeServer(nil, nil, nil, workspace:GetServerTimeNow())
         task.wait(0.02)
-        Events.minigame:InvokeServer(1.2854545116425, 1)
+
+        -- X/Y bisa diubah kalau mau perfect cast, di sini contoh -1.233, 0.5
+        local x = -1.233
+        local y = 0.5
+        local t = workspace:GetServerTimeNow()
+        Events.minigame:InvokeServer(x, y, t)
         print("[Fishing] 🎣 Cast")
     end)
 end
@@ -352,7 +359,7 @@ end
 local function reelIn()
     pcall(function()
         Events.fishing:FireServer()
-        print("[Fishing] ✅ Reel")
+        print("[Fishing] ✅ Reel (FishingCompleted)")
     end)
 end
 
@@ -365,23 +372,24 @@ local function blatantFishingLoop()
             pcall(function()
                 Events.equip:FireServer(1)
                 task.wait(0.01)
-                
+
+                -- 2x charge + minigame overlap
                 task.spawn(function()
-                    Events.charge:InvokeServer(1755848498.4834)
+                    Events.charge:InvokeServer(nil,nil,nil,workspace:GetServerTimeNow())
                     task.wait(0.01)
-                    Events.minigame:InvokeServer(1.2854545116425, 1)
+                    Events.minigame:InvokeServer(-1.233, 0.5, workspace:GetServerTimeNow())
                 end)
                 
                 task.wait(0.05)
                 
                 task.spawn(function()
-                    Events.charge:InvokeServer(1755848498.4834)
+                    Events.charge:InvokeServer(nil,nil,nil,workspace:GetServerTimeNow())
                     task.wait(0.01)
-                    Events.minigame:InvokeServer(1.2854545116425, 1)
+                    Events.minigame:InvokeServer(-1.233, 0.5, workspace:GetServerTimeNow())
                 end)
             end)
             
-            task.wait(Config.FishDelay)
+            task.wait(Config.FishDelay)   -- Slow Reel Threshold
             
             for _ = 1, 5 do
                 pcall(function() 
@@ -406,10 +414,9 @@ local function normalFishingLoop()
             isFishing = true
             
             castRod()
-            task.wait(Config.FishDelay)
+            task.wait(Config.FishDelay)  -- Slow Reel Threshold
             reelIn()
-            task.wait(Config.CatchDelay)
-            
+            task.wait(Config.CatchDelay) -- cooldown
             isFishing = false
         else
             task.wait(0.1)
@@ -430,26 +437,25 @@ end
 
 -- ====================================================================
 --                     AUTO CATCH (EVENT-BASED)
+--   Bekerja saat mancing manual & Auto Fish (pakai CatchDelay sebagai
+--   "Super Instant Delay" = jeda setelah '!' sebelum FishingCompleted)
 -- ====================================================================
 local function getAutoCatchDelay()
-    local d = tonumber(Config.CatchDelay) or 0.2
-    -- minimal 1.2 detik (mirip BypassDelayV2 script 2)
-    if d < 1.2 then
-        d = 1.2
-    end
+    local d = tonumber(Config.CatchDelay) or 1
+    if d < 0.1 then d = 0.1 end
     return d
 end
 
 local RE_ReplicateTextEffect
-local ok, err = pcall(function()
+local okRE, errRE = pcall(function()
     RE_ReplicateTextEffect = NetPackage:WaitForChild("RE/ReplicateTextEffect")
 end)
 
-if ok and RE_ReplicateTextEffect then
+if okRE and RE_ReplicateTextEffect then
     RE_ReplicateTextEffect.OnClientEvent:Connect(function(data)
         if not Config.AutoCatch then return end
         if not data or not data.TextData then return end
-        if data.TextData.EffectType ~= "Exclaim" then return end
+        if data.TextData.EffectType ~= "Exclaim" then return end  -- tanda '!'
 
         local char = LocalPlayer.Character
         if not char then return end
@@ -457,20 +463,21 @@ if ok and RE_ReplicateTextEffect then
         if not head then return end
         if data.Container ~= head then return end
 
-        -- ikan gigit di kepala kita → tunggu sedikit, lalu spam FishingCompleted
-        local delay = getAutoCatchDelay()
+        local delay = getAutoCatchDelay()   -- Super Instant Delay
 
         task.spawn(function()
+            -- tunggu sedikit setelah '!', lalu spam FishingCompleted 3x
+            task.wait(delay)
             for i = 1, 3 do
-                task.wait(delay)
                 pcall(function()
                     Events.fishing:FireServer()
                 end)
+                task.wait(0.05)
             end
         end)
     end)
 else
-    warn("[AutoCatch] Tidak menemukan RE/ReplicateTextEffect:", err)
+    warn("[AutoCatch] Tidak menemukan RE/ReplicateTextEffect:", errRE)
 end
 
 -- ====================================================================
@@ -556,6 +563,13 @@ AutoFishSection:Toggle({
     Callback = function(value)
         Config.AutoFish   = value
         fishingActive     = value
+
+        -- sinkron dengan RF/UpdateAutoFishingState
+        pcall(function()
+            if Events.updateAuto then
+                Events.updateAuto:InvokeServer(value) -- true saat ON, false saat OFF
+            end
+        end)
         
         if value then
             print("[Auto Fish] 🟢 Started " .. (Config.BlatantMode and "(BLATANT MODE)" or "(Normal)"))
@@ -581,14 +595,14 @@ AutoFishSection:Toggle({
 })
 
 AutoFishSection:Input({
-    Title       = "Fish Delay (detik)",
-    Content     = "Delay tunggu ikan menggigit. Default: 0.9 (0.1 - 10)",
+    Title       = "Slow Reel Threshold (detik)",
+    Content     = "Jeda setelah lempar sampai narik (Auto Fish). Default: 1.9",
     Placeholder = tostring(Config.FishDelay),
     Callback    = function(v)
         local num = tonumber(v)
         if num and num >= 0.1 and num <= 10 then
             Config.FishDelay = num
-            print("[Config] ✅ Fish delay set to " .. num .. "s")
+            print("[Config] ✅ Slow Reel Threshold set to " .. num .. "s")
             saveConfig()
         else
             warn("[Config] ❌ Invalid delay (must be 0.1-10)")
@@ -597,14 +611,14 @@ AutoFishSection:Input({
 })
 
 AutoFishSection:Input({
-    Title       = "Catch Delay (detik)",
-    Content     = "Dipakai sebagai delay AutoCatch (min 1.2). Default: 0.2.",
+    Title       = "Super Instant Delay (detik)",
+    Content     = "Jeda AutoCatch setelah '!' sebelum FishingCompleted. Default: 1",
     Placeholder = tostring(Config.CatchDelay),
     Callback    = function(v)
         local num = tonumber(v)
         if num and num >= 0.1 and num <= 10 then
             Config.CatchDelay = num
-            print("[Config] ✅ Catch delay set to " .. num .. "s")
+            print("[Config] ✅ Super Instant Delay set to " .. num .. "s")
             saveConfig()
         else
             warn("[Config] ❌ Invalid delay (must be 0.1-10)")
@@ -751,11 +765,12 @@ InfoSection:Paragraph({
 • Auto Fishing (Normal + Blatant)
 • Auto Sell (menjaga ikan yang di-favorite)
 • Auto Catch berbasis event (manual & auto)
+• RF/UpdateAutoFishingState sinkron dengan Auto Fish
 • GPU Saver Mode
 • Anti-AFK
 • Teleport lokasi
-• Auto Favorite Mythic & Secret (remote resmi, aman)
+• Auto Favorite Mythic & Secret (remote resmi)
     ]]
 })
 
-print("🎣 Auto Fish V4.0 - WindUI Edition Loaded!")
+print("🎣 Auto Fish V4.0 - WindUI Edition (Revisi) Loaded!")
