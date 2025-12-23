@@ -1,7 +1,8 @@
 -- =========================================================
 -- BLATANT AUTO FISHING • MIRIP ATOMIC (2 REMOTE SAJA)
---  - RF/UpdateAutoFishingState
---  - RE/FishingCompleted
+-- Remote Outgoing dari script ini:
+--   RF/UpdateAutoFishingState (x1 ON, x1 OFF)
+--   RE/FishingCompleted (burst x3 berkali-kali)
 -- =========================================================
 
 -----------------------
@@ -16,7 +17,7 @@ local UIS               = game:GetService("UserInputService")
 local LocalPlayer       = Players.LocalPlayer
 
 -----------------------
--- NET / REMOTE (HANYA 2 + 1 INCOMING)
+-- NET / REMOTE
 -----------------------
 local net = ReplicatedStorage
     :WaitForChild("Packages")
@@ -32,14 +33,13 @@ local RE_ReplicateTextEffect    = net:WaitForChild("RE/ReplicateTextEffect") -- 
 -- CONFIG
 -----------------------
 local Config = {
-    BlatantAuto   = false, -- toggle utama
-    UseExclaim    = true,  -- ON: burst hanya saat tanda '!' (lebih aman)
-    SlowReel      = 1.7,   -- dipakai sebagai jeda antar burst kalau UseExclaim = false
-    SuperInstant  = 1.0,   -- delay setelah '!' sebelum burst (UseExclaim = true)
-    RandomizeDelay= false, -- acak sedikit SlowReel & SuperInstant
-    BurstCount    = 3,     -- berapa kali FishingCompleted per burst
-    BurstGap      = 0.03,  -- jeda antar FishingCompleted di dalam burst
-    HideMinigameUI= true,  -- sembunyikan bar hijau di layar (client-only)
+    AutoFishing    = false, -- toggle utama
+    SlowReel       = 1.7,   -- dipakai untuk throttle antar burst (mirip "Slow Reel Threshold")
+    SuperInstant   = 1.0,   -- delay setelah '!' sebelum burst FishingCompleted
+    RandomizeDelay = false, -- acak sedikit SlowReel & SuperInstant
+    BurstCount     = 3,     -- berapa kali FishingCompleted per burst (Atomic terlihat x3)
+    BurstGap       = 0.03,  -- jeda antar FishingCompleted di dalam burst
+    HideMinigameUI = true,  -- sembunyikan bar hijau tap-tap
 }
 
 -----------------------
@@ -59,7 +59,7 @@ local function getSlowReel()
     if base > 10   then base = 10   end
 
     if Config.RandomizeDelay then
-        local delta = base * 0.3 -- ±30%
+        local delta = base * 0.3
         base = base + (math.random() * 2 - 1) * delta
         if base < 0.05 then base = 0.05 end
     end
@@ -127,13 +127,39 @@ task.spawn(function()
 end)
 
 -----------------------
--- CORE BLATANT LOGIC (2 REMOTE SAJA)
+-- HOOK METAMETHOD: BLOCK REMOTE AUTO FISHING GAME
 -----------------------
-local BlatantState = {
-    running = false,
-}
+local BlatantState = { running = false }
+local hookEnabled  = false
+
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    if hookEnabled
+        and method == "InvokeServer"
+        and typeof(self) == "Instance"
+        and self:IsA("RemoteFunction")
+    then
+        local name = self.Name
+        -- block remote bawaan auto fishing game
+        if name == "RF/ChargeFishingRod"
+        or name == "RF/RequestFishingMinigameStarted"
+        or name == "RF/CancelFishingInputs" then
+            -- jangan diteruskan ke server
+            return nil
+        end
+    end
+
+    return oldNamecall(self, ...)
+end)
+
+-----------------------
+-- BLATANT CORE (HANYA 2 REMOTE KELUAR)
+-----------------------
+local lastBurstTime = 0
 
 local function doBurst()
+    lastBurstTime = os.clock()
     for i = 1, (Config.BurstCount or 3) do
         pcall(function()
             RE_FishingCompleted:FireServer()
@@ -142,25 +168,22 @@ local function doBurst()
     end
 end
 
--- MODE 1: TANPA '!': SPAM BERDASAR SLOWREEL
-local function spamLoopNoExclaim()
-    while BlatantState.running and not Config.UseExclaim do
-        doBurst()
-        task.wait(getSlowReel())
-    end
-end
-
--- MODE 2: DENGAN '!': BURST SAAT SERVER KIRIM EXCLAIM
+-- Selalu pakai tanda '!' sebagai trigger (tanpa opsi mode lain)
 RE_ReplicateTextEffect.OnClientEvent:Connect(function(data)
     if not BlatantState.running then return end
-    if not Config.UseExclaim then return end
     if not data or not data.TextData then return end
-    if data.TextData.EffectType ~= "Exclaim" then return end
+    if data.TextData.EffectType ~= "Exclaim" then return end -- tanda '!'
 
     local char = LocalPlayer.Character
     if not char then return end
     local head = char:FindFirstChild("Head")
     if not head or data.Container ~= head then return end
+
+    -- throttle pakai SlowReel, supaya tidak nabrak kalau ada spam efek
+    local now = os.clock()
+    if now - lastBurstTime < getSlowReel() then
+        return
+    end
 
     local delay = getSuperInstant()
     task.spawn(function()
@@ -172,19 +195,17 @@ end)
 local function StartBlatant()
     if BlatantState.running then return end
     BlatantState.running = true
+    hookEnabled = true
 
-    -- persis Atomic: UpdateAutoFishingState(true)
+    -- persis Atomic: UpdateAutoFishingState(true) sekali
     pcall(function()
         RF_UpdateAutoFishingState:InvokeServer(true)
     end)
-
-    if not Config.UseExclaim then
-        task.spawn(spamLoopNoExclaim)
-    end
 end
 
 local function StopBlatant()
     BlatantState.running = false
+    hookEnabled = false
 
     pcall(function()
         RF_UpdateAutoFishingState:InvokeServer(false)
@@ -200,7 +221,7 @@ local Window = WindUI:CreateWindow({
     Title  = "Auto Fishing Mode • Blatant",
     Icon   = "fish",
     Author = "by YOU",
-    Folder = "AtomicBlatant2Remote",
+    Folder = "AtomicBlatantPure",
     Size   = UDim2.fromOffset(500, 320),
     Theme  = "Indigo",
     KeySystem = false
@@ -209,8 +230,8 @@ local Window = WindUI:CreateWindow({
 WindUI:SetNotificationLower(true)
 WindUI:Notify({
     Title   = "Loaded",
-    Content = "Blatant Auto Fishing siap.\nGame auto fishing yang lempar, script hanya spam FishingCompleted.",
-    Duration= 7,
+    Content = "Blatant Auto Fishing (2 remote, pakai tanda '!') siap.",
+    Duration= 6,
     Icon    = "circle-check"
 })
 
@@ -279,7 +300,7 @@ task.spawn(function()
 end)
 
 -----------------------
--- UI CONTENT (DISAMAKAN DENGAN KONSEP ATOMIC)
+-- UI CONTENT (tanpa opsi mode)
 -----------------------
 local MainTab = Window:Tab({
     Title = "Main",
@@ -287,40 +308,28 @@ local MainTab = Window:Tab({
 })
 
 local AutoSection = MainTab:Section({
-    Title = "Auto Fishing Mode • Blatant",
+    Title = "Blatant Auto Fishing",
     Icon  = "fish"
 })
 
 AutoSection:Toggle({
     Title   = "Auto Fishing",
-    Content = "ON: RF/UpdateAutoFishingState(true) + spam RE/FishingCompleted.\nOFF: RF/UpdateAutoFishingState(false).",
-    Value   = Config.BlatantAuto,
+    Content = "ON: RF/UpdateAutoFishingState(true) + burst RE/FishingCompleted saat '!' muncul.\nOFF: RF/UpdateAutoFishingState(false).",
+    Value   = Config.AutoFishing,
     Callback = function(v)
-        Config.BlatantAuto = v
+        Config.AutoFishing = v
         if v then
             StartBlatant()
         else
             StopBlatant()
         end
-        print("[BlatantAuto] =", v)
-    end
-})
-
-AutoSection:Toggle({
-    Title   = "Gunakan tanda '!' (lebih aman)",
-    Content = "ON: burst FishingCompleted hanya saat efek '!' muncul.\nOFF: spam periodik pakai Slow Reel Threshold.",
-    Value   = Config.UseExclaim,
-    Callback = function(v)
-        Config.UseExclaim = v
-        if BlatantState.running and (not v) then
-            task.spawn(spamLoopNoExclaim)
-        end
+        print("[AutoFishing] =", v)
     end
 })
 
 AutoSection:Input({
     Title       = "Slow Reel Threshold (detik)",
-    Content     = "Dipakai sebagai jeda antar burst jika tanda '!' dimatikan (0.05 - 10).",
+    Content     = "Throttle antar burst (0.05 - 10). Semakin kecil, semakin sering ikan.",
     Placeholder = tostring(Config.SlowReel),
     Callback    = function(v)
         local n = tonumber(v)
@@ -359,7 +368,7 @@ AutoSection:Toggle({
 
 AutoSection:Input({
     Title       = "Burst Count",
-    Content     = "Jumlah RE/FishingCompleted per burst (1 - 10).",
+    Content     = "Jumlah RE/FishingCompleted per burst (1 - 10). Atomic biasanya 3.",
     Placeholder = tostring(Config.BurstCount),
     Callback    = function(v)
         local n = tonumber(v)
@@ -397,7 +406,7 @@ AutoSection:Toggle({
 })
 
 -- =========================================================
--- NEVERM1ND FLOATING BUTTON
+-- NEVERM1ND FLOATING BUTTON (sama seperti sebelumnya)
 -- =========================================================
 local function createNeverm1ndGui(parent)
     local screenGui = Instance.new("ScreenGui")
@@ -569,4 +578,4 @@ toggleButton.MouseButton1Click:Connect(function()
     setMainVisible(not uiVisible)
 end)
 
-print("[Blatant2Remote] Script loaded.")
+print("[Blatant2Remote+Hook+ExclaimOnly] Script loaded.")
