@@ -1,5 +1,5 @@
 -- =========================================================
--- SUPER INSTANT AUTOFISH V2 + FLOATING BUTTON (TANPA ANIMASI)
+-- SUPER INSTANT AUTOFISH V2 + FLOATING BUTTON (FIXED UI)
 -- =========================================================
 
 -----------------------
@@ -35,10 +35,10 @@ local updateAuto = net:FindFirstChild("RF/UpdateAutoFishingState")
 -- CONFIG SEDERHANA (DI RAM)
 -----------------------
 local Config = {
-    AutoFish    = false, -- Super Instant toggle
+    AutoFish    = false,  -- Super Instant toggle
     PerfectCast = true,
-    FishDelay   = 1.5,   -- Slow Reel Threshold (detik) - bebas kamu atur
-    CatchDelay  = 1.0,   -- Super Instant Delay (detik)  - bebas kamu atur
+    FishDelay   = 1.5,    -- Slow Reel Threshold (detik) - isi manual
+    CatchDelay  = 1.0,    -- Super Instant Delay (detik)  - isi manual
 }
 
 -----------------------
@@ -50,7 +50,7 @@ LocalPlayer.Idled:Connect(function()
 end)
 
 -----------------------
--- AUTO FISH V2 LOGIC
+-- LOGIC AUTOFISH V2
 -----------------------
 local AutoV2 = {
     running   = false,
@@ -85,11 +85,11 @@ local function StartAutoFishV2()
                 Events.equip:FireServer(1)
                 task.wait(0.1)
 
-                -- charge 1 (pakai waktu server)
+                -- charge pertama (pakai waktu server)
                 Events.charge:InvokeServer(workspace:GetServerTimeNow())
                 task.wait(0.5)
 
-                -- charge 2 (release) dengan timestamp
+                -- charge kedua (release) dengan timestamp
                 local timestamp = workspace:GetServerTimeNow()
                 Events.charge:InvokeServer(timestamp)
 
@@ -128,7 +128,7 @@ end
 Events.textEffect.OnClientEvent:Connect(function(data)
     if not AutoV2.autoCatch then return end
     if not data or not data.TextData then return end
-    if data.TextData.EffectType ~= "Exclaim" then return end -- tanda '!'
+    if data.TextData.EffectType ~= "Exclaim" then return end  -- tanda '!'
 
     local char = LocalPlayer.Character
     if not char then return end
@@ -148,13 +148,8 @@ Events.textEffect.OnClientEvent:Connect(function(data)
 end)
 
 -- =========================================================
--- WINDUI WINDOW + GET ScreenGui UTAMA
+-- WINDUI WINDOW
 -- =========================================================
-local existing = {}
-for _,g in ipairs(CoreGui:GetChildren()) do
-    existing[g] = true
-end
-
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 local Window = WindUI:CreateWindow({
@@ -167,7 +162,7 @@ local Window = WindUI:CreateWindow({
     KeySystem = false
 })
 
--- JANGAN pakai toggle key keyboard (biarkan kosong)
+-- JANGAN pakai toggle key lagi
 -- Window:SetToggleKey(Enum.KeyCode.G)
 
 WindUI:SetNotificationLower(true)
@@ -178,19 +173,36 @@ WindUI:Notify({
     Icon    = "circle-check"
 })
 
--- Cari ScreenGui baru yang dibuat WindUI
+-- CARI ScreenGui UTAMA WINDUI DENGAN MENCARI LABEL TITLE
 local mainGui
-for _,g in ipairs(CoreGui:GetChildren()) do
-    if not existing[g] and g:IsA("ScreenGui") then
-        mainGui = g
-        break
+local function findMainGui()
+    for _, inst in ipairs(CoreGui:GetDescendants()) do
+        if inst:IsA("TextLabel") and tostring(inst.Text):find("Super Instant AutoFish V2") then
+            local sg = inst:FindFirstAncestorOfClass("ScreenGui")
+            if sg then
+                return sg
+            end
+        end
     end
+end
+
+-- coba langsung, kalau belum ketemu coba lagi setelah delay
+mainGui = findMainGui()
+if not mainGui then
+    task.delay(1, function()
+        mainGui = findMainGui()
+        if not mainGui then
+            warn("[UI] Tidak menemukan ScreenGui WindUI. Floating button tidak bisa toggle.")
+        end
+    end)
 end
 
 local uiVisible = true
 local function setMainVisible(state)
     uiVisible = state
-    if mainGui then mainGui.Enabled = state end
+    if mainGui then
+        mainGui.Enabled = state
+    end
 end
 
 -----------------------
@@ -261,11 +273,11 @@ AutoFishSection:Input({
     end
 })
 
--- Pastikan UI utama kelihatan saat awal
+-- pastikan UI kelihatan saat awal
 setMainVisible(true)
 
 -- =========================================================
--- FLOATING BUTTON DRAGGABLE (UNTUK SHOW/HIDE WINDOW)
+-- FLOATING BUTTON DRAGGABLE
 -- =========================================================
 local floatGui = Instance.new("ScreenGui")
 floatGui.Name = "SuperInstant_Floating"
@@ -277,27 +289,26 @@ local floatButton = Instance.new("ImageButton")
 floatButton.Name = "ToggleButton"
 floatButton.Parent = floatGui
 floatButton.Size = UDim2.new(0, 60, 0, 60)
-floatButton.Position = UDim2.new(0, 20, 0.5, -30)  -- posisi awal di kiri
+floatButton.Position = UDim2.new(0, 20, 0.5, -30)  -- posisi awal kiri
 floatButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 floatButton.BackgroundTransparency = 0.2
 floatButton.BorderSizePixel = 0
 floatButton.AutoButtonColor = true
-floatButton.Image = "rbxassetid://6031091002" -- ikon fish bundar, bisa diganti
+floatButton.Image = "rbxassetid://6031091002" -- ikon ikan bulat
 floatButton.ImageColor3 = Color3.fromRGB(255,255,255)
 
 local uicorner = Instance.new("UICorner", floatButton)
 uicorner.CornerRadius = UDim.new(1,0)
 
--- klik = toggle main UI
+-- klik = toggle main GUI
 floatButton.MouseButton1Click:Connect(function()
     setMainVisible(not uiVisible)
 end)
 
--- DRAG LOGIC
-local dragging = false
-local dragInput, dragStart, startPos
+-- drag logic
+local dragging, dragInput, dragStart, startPos
 
-local function update(input)
+local function updateDrag(input)
     local delta = input.Position - dragStart
     floatButton.Position = UDim2.new(
         0, startPos.X.Offset + delta.X,
@@ -308,7 +319,7 @@ end
 floatButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
     or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
+        dragging  = true
         dragStart = input.Position
         startPos  = floatButton.Position
 
@@ -329,7 +340,7 @@ end)
 
 UIS.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
-        update(input)
+        updateDrag(input)
     end
 end)
 
