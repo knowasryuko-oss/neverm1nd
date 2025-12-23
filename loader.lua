@@ -1,5 +1,5 @@
 -- =========================================================
--- AUTO FISHING MODE • SUPER INSTANT (REBUILD ala ATOMIC)
+-- AUTO FISHING MODE • SUPER INSTANT (FLOW ATOMIC)
 -- =========================================================
 
 -----------------------
@@ -41,9 +41,9 @@ local Events = {
 local Config = {
     AutoFishing      = false, -- toggle utama
     RandomizeResults = false, -- ON: posisi minigame acak; OFF: dekat perfect
-    SlowReel         = 1.7,   -- Slow Reel Threshold (detik)
-    SuperInstant     = 1.0,   -- Super Instant Delay (detik)
-    RandomizeDelay   = false, -- acak sedikit SlowReel & SuperInstant (±30%)
+    SlowReel         = 1.7,   -- jeda antar cast (detik)
+    SuperInstant     = 1.0,   -- jeda setelah '!' (detik)
+    RandomizeDelay   = false, -- acak sedikit SlowReel & SuperInstant
     BurstCount       = 3,     -- FishingCompleted per '!'-event
     BurstGap         = 0.03,  -- jeda antar FishingCompleted di burst
 }
@@ -86,7 +86,7 @@ local function getSuperInstant()
 end
 
 -----------------------
--- HIDE MINIGAME UI (SELALU AKTIF, TANPA TOGGLE)
+-- HIDE MINIGAME UI (SELALU AKTIF)
 -----------------------
 local function hardHideMinigameGui()
     local roots = {}
@@ -114,7 +114,7 @@ local function hardHideMinigameGui()
                     txt:find("Click Fast") or
                     txt:find("Klik untuk Lempar")
                 ) then
-                    -- matikan semua frame di atas label ini
+                    -- matikan semua Frame ancestor
                     local frame = inst:FindFirstAncestorOfClass("Frame")
                     while frame do
                         frame.Visible = false
@@ -125,7 +125,7 @@ local function hardHideMinigameGui()
                         end
                     end
 
-                    -- matikan ScreenGui tempat dia berada
+                    -- matikan ScreenGui minigame
                     local sg = inst:FindFirstAncestorOfClass("ScreenGui")
                     if sg then
                         sg.Enabled = false
@@ -169,9 +169,29 @@ task.spawn(function()
 end)
 
 -----------------------
--- AUTO FISHING LOOP (CANCEL → CHARGE x2 → MINIGAME → WAIT)
+-- AUTO FISHING LOOP (CANCEL → CHARGE x2 → MINIGAME → '!' → FISHINGCOMPLETE → CANCEL → SLOWREEL)
 -----------------------
 local Auto = { running = false }
+
+local function waitForExclaimOnce()
+    while Auto.running do
+        local ok, data = pcall(function()
+            return Events.textEffect.OnClientEvent:Wait()
+        end)
+        if not ok or not Auto.running then return end
+
+        if data and data.TextData and data.TextData.EffectType == "Exclaim" then
+            local char = LocalPlayer.Character
+            if not char then
+                continue
+            end
+            local head = char:FindFirstChild("Head")
+            if head and data.Container == head then
+                return
+            end
+        end
+    end
+end
 
 local function StartAutoFishing()
     if Auto.running then return end
@@ -185,7 +205,7 @@ local function StartAutoFishing()
     task.spawn(function()
         while Auto.running do
             pcall(function()
-                -- 1) CancelFishingInputs
+                -- 1) CancelFishingInputs (pastikan state bersih)
                 pcall(function()
                     Events.cancelInputs:InvokeServer()
                 end)
@@ -212,7 +232,30 @@ local function StartAutoFishing()
                 local t3 = workspace:GetServerTimeNow()
                 Events.minigame:InvokeServer(x, y, t3)
 
-                -- 4) Tunggu SlowReel sebelum siklus baru
+                -- 4) Tunggu '!' dari server (Exclaim di Head kita)
+                waitForExclaimOnce()
+                if not Auto.running then return end
+
+                -- 5) Super Instant Delay
+                local delay = getSuperInstant()
+                if delay > 0 then
+                    task.wait(delay)
+                end
+
+                -- 6) Burst FishingCompleted (tarik ikan)
+                for i = 1, (Config.BurstCount or 3) do
+                    pcall(function()
+                        Events.finish:FireServer()
+                    end)
+                    task.wait(Config.BurstGap or 0.03)
+                end
+
+                -- 7) Cancel lagi untuk nutup minigame/animasi
+                pcall(function()
+                    Events.cancelInputs:InvokeServer()
+                end)
+
+                -- 8) SlowReel sebelum siklus berikut
                 task.wait(getSlowReel())
             end)
 
@@ -234,40 +277,15 @@ local function StopAutoFishing()
 end
 
 -----------------------
--- SUPER INSTANT AUTO CATCH (TRIGGER DARI '!')
+-- WINDUI WINDOW
 -----------------------
-Events.textEffect.OnClientEvent:Connect(function(data)
-    if not Config.AutoFishing then return end
-    if not data or not data.TextData then return end
-    if data.TextData.EffectType ~= "Exclaim" then return end  -- tanda '!'
-
-    local char = LocalPlayer.Character
-    if not char then return end
-    local head = char:FindFirstChild("Head")
-    if not head or data.Container ~= head then return end
-
-    local delay = getSuperInstant()
-    task.spawn(function()
-        task.wait(delay)
-        for i = 1, (Config.BurstCount or 3) do
-            pcall(function()
-                Events.finish:FireServer()
-            end)
-            task.wait(Config.BurstGap or 0.03)
-        end
-    end)
-end)
-
--- =========================================================
--- WINDUI WINDOW (UI mirip Atomic: 4 kontrol utama)
--- =========================================================
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 local Window = WindUI:CreateWindow({
     Title  = "Auto Fishing Mode • Super Instant",
     Icon   = "fish",
     Author = "by YOU",
-    Folder = "AtomicRebuild_NoHideToggle",
+    Folder = "AtomicRebuild_FinalV2",
     Size   = UDim2.fromOffset(500, 340),
     Theme  = "Indigo",
     KeySystem = false
@@ -282,7 +300,7 @@ WindUI:Notify({
 })
 
 -----------------------
--- FIND MAIN UI UNTUK TOGGLE (NEVERM1ND)
+-- FIND MAIN UI UNTUK TOGGLE
 -----------------------
 local mainGui
 local mainRootFrame
@@ -360,7 +378,7 @@ local AutoSection = MainTab:Section({
 
 AutoSection:Toggle({
     Title   = "Auto Fishing",
-    Content = "ON: Cancel + Charge x2 + RequestMinigame + Super Instant '!' finish.\nOFF: UpdateAutoFishingState(false).",
+    Content = "ON: Cancel + Charge x2 + RequestMinigame + tunggu '!' + Super Instant finish.\nOFF: UpdateAutoFishingState(false).",
     Value   = Config.AutoFishing,
     Callback = function(v)
         Config.AutoFishing = v
@@ -399,7 +417,7 @@ AutoSection:Input({
 
 AutoSection:Input({
     Title       = "Super Instant Delay (detik)",
-    Content     = "Jeda setelah '!' sebelum FishingCompleted burst (0.001 - 10).",
+    Content     = "Jeda setelah tanda '!' sebelum FishingCompleted burst (0.001 - 10).",
     Placeholder = tostring(Config.SuperInstant),
     Callback    = function(v)
         local n = tonumber(v)
@@ -479,6 +497,7 @@ local function createNeverm1ndGui(parent)
     local ImageCorner = Instance.new("UICorner", ImageLabel6)
     ImageCorner.CornerRadius = UDim.new(0, 13)
 
+    -- drag
     local dragging = false
     local dragStart
     local startPos
@@ -594,4 +613,4 @@ toggleButton.MouseButton1Click:Connect(function()
     setMainVisible(not uiVisible)
 end)
 
-print("[AtomicRebuild_NoHideToggle] Script loaded.")
+print("[AtomicRebuild_FinalV2] Script loaded.")
