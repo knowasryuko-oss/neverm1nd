@@ -1,5 +1,5 @@
 -- =========================================================
--- SUPER INSTANT AUTOFISH V2 + FLOATING BUTTON (FIXED UI)
+-- SUPER INSTANT AUTOFISH V2 + NEVERM1ND FLOATING BUTTON
 -- =========================================================
 
 -----------------------
@@ -37,8 +37,8 @@ local updateAuto = net:FindFirstChild("RF/UpdateAutoFishingState")
 local Config = {
     AutoFish    = false,  -- Super Instant toggle
     PerfectCast = true,
-    FishDelay   = 1.5,    -- Slow Reel Threshold (detik) - isi manual
-    CatchDelay  = 1.0,    -- Super Instant Delay (detik)  - isi manual
+    FishDelay   = 1.5,    -- Slow Reel Threshold (detik)
+    CatchDelay  = 1.0,    -- Super Instant Delay (detik)
 }
 
 -----------------------
@@ -162,9 +162,6 @@ local Window = WindUI:CreateWindow({
     KeySystem = false
 })
 
--- JANGAN pakai toggle key lagi
--- Window:SetToggleKey(Enum.KeyCode.G)
-
 WindUI:SetNotificationLower(true)
 WindUI:Notify({
     Title   = "Loaded",
@@ -173,37 +170,72 @@ WindUI:Notify({
     Icon    = "circle-check"
 })
 
--- CARI ScreenGui UTAMA WINDUI DENGAN MENCARI LABEL TITLE
+-----------------------
+-- FUNGSI CARI & TOGGLE MAIN GUI WINDUI
+-----------------------
 local mainGui
+local uiVisible = true
+
 local function findMainGui()
-    for _, inst in ipairs(CoreGui:GetDescendants()) do
-        if inst:IsA("TextLabel") and tostring(inst.Text):find("Super Instant AutoFish V2") then
-            local sg = inst:FindFirstAncestorOfClass("ScreenGui")
-            if sg then
-                return sg
+    local parents = {}
+
+    -- CoreGui (umum di executor)
+    table.insert(parents, CoreGui)
+
+    -- PlayerGui (kalau lib parent ke PlayerGui)
+    local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if playerGui then
+        table.insert(parents, playerGui)
+    end
+
+    -- gethui() (beberapa executor pakai ini)
+    pcall(function()
+        if typeof(gethui) == "function" then
+            local hui = gethui()
+            if typeof(hui) == "Instance" then
+                table.insert(parents, hui)
+            end
+        end
+    end)
+
+    for _, root in ipairs(parents) do
+        for _, inst in ipairs(root:GetDescendants()) do
+            if inst:IsA("TextLabel") and tostring(inst.Text):find("Super Instant AutoFish V2") then
+                local sg = inst:FindFirstAncestorOfClass("ScreenGui")
+                if sg then
+                    return sg
+                end
             end
         end
     end
 end
 
--- coba langsung, kalau belum ketemu coba lagi setelah delay
-mainGui = findMainGui()
-if not mainGui then
-    task.delay(1, function()
-        mainGui = findMainGui()
-        if not mainGui then
-            warn("[UI] Tidak menemukan ScreenGui WindUI. Floating button tidak bisa toggle.")
-        end
-    end)
-end
-
-local uiVisible = true
 local function setMainVisible(state)
     uiVisible = state
+
+    -- kalau belum ketemu / sudah ke-Destroy, coba cari lagi
+    if (not mainGui) or (not mainGui.Parent) then
+        mainGui = findMainGui()
+    end
+
     if mainGui then
         mainGui.Enabled = state
+    else
+        warn("[UI] mainGui belum ketemu, tidak bisa toggle.")
     end
 end
+
+-- opsional: pastikan awalnya ON
+task.spawn(function()
+    task.wait(1)
+    mainGui = findMainGui()
+    if mainGui then
+        mainGui.Enabled = true
+        uiVisible = true
+    else
+        warn("[UI] Belum menemukan ScreenGui WindUI (akan dicari lagi saat klik tombol Neverm1nd).")
+    end
+end)
 
 -----------------------
 -- ISI WINDOW (TAB MAIN)
@@ -273,75 +305,196 @@ AutoFishSection:Input({
     end
 })
 
--- pastikan UI kelihatan saat awal
-setMainVisible(true)
-
 -- =========================================================
--- FLOATING BUTTON DRAGGABLE
+-- NEVERM1ND FLOATING BUTTON (MODEL AJO-MOK)
 -- =========================================================
-local floatGui = Instance.new("ScreenGui")
-floatGui.Name = "SuperInstant_Floating"
-floatGui.ResetOnSpawn = false
-floatGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-floatGui.Parent = CoreGui
+local function createNeverm1ndGui(parent)
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "Neverm1nd"
+    screenGui.ResetOnSpawn = false
+    screenGui.DisplayOrder = 999999
+    screenGui.IgnoreGuiInset = true
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    screenGui.Parent = parent
 
-local floatButton = Instance.new("ImageButton")
-floatButton.Name = "ToggleButton"
-floatButton.Parent = floatGui
-floatButton.Size = UDim2.new(0, 60, 0, 60)
-floatButton.Position = UDim2.new(0, 20, 0.5, -30)  -- posisi awal kiri
-floatButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-floatButton.BackgroundTransparency = 0.2
-floatButton.BorderSizePixel = 0
-floatButton.AutoButtonColor = true
-floatButton.Image = "rbxassetid://6031091002" -- ikon ikan bulat
-floatButton.ImageColor3 = Color3.fromRGB(255,255,255)
+    -- Frame utama
+    local Frame1 = Instance.new("Frame")
+    Frame1.AnchorPoint = Vector2.new(0, 0.5)
+    Frame1.Name = "main"
+    Frame1.Position = UDim2.new(0, 5, 0.5, 0)
+    Frame1.Size = UDim2.new(0, 55, 0, 55)
+    Frame1.BackgroundColor3 = Color3.new(1, 1, 1)
+    Frame1.BorderSizePixel = 0
+    Frame1.Active = true
+    Frame1.Draggable = false
+    Frame1.Parent = screenGui
 
-local uicorner = Instance.new("UICorner", floatButton)
-uicorner.CornerRadius = UDim.new(1,0)
+    -- Sistem drag (PC + Mobile)
+    local dragging = false
+    local dragInput
+    local dragStart
+    local startPos
 
--- klik = toggle main GUI
-floatButton.MouseButton1Click:Connect(function()
+    local function update(input)
+        local delta = input.Position - dragStart
+        Frame1.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+
+    Frame1.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = Frame1.Position
+
+            local connection
+            connection = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    if connection then
+                        connection:Disconnect()
+                    end
+                end
+            end)
+        end
+    end)
+
+    Frame1.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch) then
+            update(input)
+        end
+    end)
+
+    UIS.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch) then
+            update(input)
+        end
+    end)
+
+    -- UIGradient background
+    local UIGradient2 = Instance.new("UIGradient", Frame1)
+    UIGradient2.Rotation = 50
+    UIGradient2.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.new(0.643137,0.615686,1)),
+        ColorSequenceKeypoint.new(0.515913, Color3.new(0.117647,0.105882,0.14902)),
+        ColorSequenceKeypoint.new(1, Color3.new(0.643137,0.615686,1))
+    }
+
+    -- UICorner
+    local UICorner3 = Instance.new("UICorner", Frame1)
+    UICorner3.CornerRadius = UDim.new(0, 15)
+
+    -- UIStroke
+    local UIStroke4 = Instance.new("UIStroke", Frame1)
+    UIStroke4.Color = Color3.new(1, 1, 1)
+    UIStroke4.Thickness = 2
+
+    local UIGradient5 = Instance.new("UIGradient", UIStroke4)
+    UIGradient5.Rotation = 90
+    UIGradient5.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.new(0.286275,0.415686,1)),
+        ColorSequenceKeypoint.new(1, Color3.new(0.137255,0.137255,0.137255))
+    }
+
+    -- Icon
+    local ImageLabel6 = Instance.new("ImageLabel", Frame1)
+    ImageLabel6.Size = UDim2.new(0, 35, 0, 35)
+    ImageLabel6.Image = "rbxassetid://104695336294005" -- ganti kalau mau icon lain
+    ImageLabel6.BackgroundTransparency = 1
+    ImageLabel6.Position = UDim2.new(0.181818187, 0, 0.181818187, 0)
+    ImageLabel6.BorderColor3 = Color3.new(0, 0, 0)
+    ImageLabel6.Name = "imege"
+    ImageLabel6.BorderSizePixel = 0
+    ImageLabel6.BackgroundColor3 = Color3.new(1, 1, 1)
+
+    -- Tombol transparan untuk klik/toggle
+    local TextButton7 = Instance.new("TextButton", Frame1)
+    TextButton7.TextColor3 = Color3.new(0, 0, 0)
+    TextButton7.BorderColor3 = Color3.new(0, 0, 0)
+    TextButton7.TextTransparency = 1
+    TextButton7.Font = Enum.Font.SourceSans
+    TextButton7.Name = "togl"
+    TextButton7.TextSize = 14
+    TextButton7.Size = UDim2.new(0, 55, 0, 50)
+    TextButton7.BackgroundTransparency = 1
+    TextButton7.BorderSizePixel = 0
+    TextButton7.BackgroundColor3 = Color3.new(1, 1, 1)
+    TextButton7.ZIndex = 9999999
+
+    -- Drag juga bisa lewat tombol
+    TextButton7.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = Frame1.Position
+
+            local connection
+            connection = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    if connection then
+                        connection:Disconnect()
+                    end
+                end
+            end)
+        end
+    end)
+
+    TextButton7.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch) then
+            update(input)
+        end
+    end)
+
+    return screenGui
+end
+
+-- Hapus instance lama Neverm1nd kalau ada
+local function destroyOldNeverm1nd()
+    for _, gui in ipairs(CoreGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Name == "Neverm1nd" then
+            gui:Destroy()
+        end
+    end
+    pcall(function()
+        if typeof(gethui) == "function" then
+            local hui = gethui()
+            if typeof(hui) == "Instance" then
+                local old = hui:FindFirstChild("Neverm1nd")
+                if old then old:Destroy() end
+            end
+        end
+    end)
+end
+
+destroyOldNeverm1nd()
+
+-- Tentukan parent yang cocok (gethui atau CoreGui)
+local parentForNeverm1nd = CoreGui
+pcall(function()
+    if typeof(gethui) == "function" then
+        local hui = gethui()
+        if typeof(hui) == "Instance" then
+            parentForNeverm1nd = hui
+        end
+    end
+end)
+
+local neverGui = createNeverm1ndGui(parentForNeverm1nd)
+
+-- Klik tombol Neverm1nd = toggle UI WindUI
+local toggleButton = neverGui:WaitForChild("main"):WaitForChild("togl")
+toggleButton.MouseButton1Click:Connect(function()
     setMainVisible(not uiVisible)
 end)
 
--- drag logic
-local dragging, dragInput, dragStart, startPos
-
-local function updateDrag(input)
-    local delta = input.Position - dragStart
-    floatButton.Position = UDim2.new(
-        0, startPos.X.Offset + delta.X,
-        0, startPos.Y.Offset + delta.Y
-    )
-end
-
-floatButton.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-    or input.UserInputType == Enum.UserInputType.Touch then
-        dragging  = true
-        dragStart = input.Position
-        startPos  = floatButton.Position
-
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
-
-floatButton.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement
-    or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
-
-UIS.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        updateDrag(input)
-    end
-end)
-
-print("[SuperInstant] Script + floating button loaded.")
+print("[SuperInstant] Script + Neverm1nd floating button loaded.")
