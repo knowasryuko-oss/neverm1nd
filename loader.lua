@@ -1,14 +1,3 @@
--- =========================================================
--- BLATANT TESTER (PARALLEL) + FAKE "OKE" + "!"
--- Flow per cast:
---   Charge({time}) -> Minigame(1,0,time2) -> firesignal "OKE" + "!"
---   task.spawn: wait CompleteDelay -> FishingCompleted()
---               wait CancelDelay   -> CancelInputs()
--- =========================================================
-
------------------------
--- SERVICES
------------------------
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser       = game:GetService("VirtualUser")
