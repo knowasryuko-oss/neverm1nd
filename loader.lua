@@ -1,6 +1,10 @@
 -- =========================================================
--- BLATANT TESTER (PARALLEL PERSIS FLOW YANG DITEMUKAN)
--- Charge({time}) -> Minigame(1,0,time2) -> wait CompleteDelay -> FishingCompleted() -> wait CancelDelay -> CancelInputs()
+-- BLATANT TESTER (FIRE FAKE '!' + PARALLEL COMPLETE/CANCEL)
+-- Flow per cast:
+--   Charge({time}) -> Minigame(1,0,time2) -> firesignal '!' ke Head
+-- Handler '!' (hanya milik kita):
+--   wait CompleteDelay -> FishingCompleted()
+--   wait CancelDelay   -> CancelInputs()
 -- =========================================================
 
 -----------------------
@@ -11,6 +15,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser       = game:GetService("VirtualUser")
 local CoreGui           = game:GetService("CoreGui")
 local UIS               = game:GetService("UserInputService")
+local HttpService       = game:GetService("HttpService")
 
 local LocalPlayer       = Players.LocalPlayer
 
@@ -28,6 +33,7 @@ local Events = {
     charge         = net:WaitForChild("RF/ChargeFishingRod"),
     minigame       = net:WaitForChild("RF/RequestFishingMinigameStarted"),
     finish         = net:WaitForChild("RE/FishingCompleted"),
+    textEffect     = net:WaitForChild("RE/ReplicateTextEffect"),
 
     equipHotbar    = net:FindFirstChild("RE/EquipToolFromHotbar"), -- opsional
     unequipOxy     = net:FindFirstChild("RF/UnequipOxygenTank"),   -- opsional
@@ -38,9 +44,9 @@ local Events = {
 -- CONFIG
 -----------------------
 local Config = {
-    TesterEnabled = false, -- toggle utama
-    CompleteDelay = 0.45,  -- jeda dari RequestMinigame ke FishingCompleted
-    CancelDelay   = 0.30,  -- jeda dari FishingCompleted ke CancelInputs
+    TesterEnabled = false,  -- toggle utama
+    CompleteDelay = 0.45,   -- jeda dari fake '!' sampai FishingCompleted
+    CancelDelay   = 0.30,   -- jeda dari FishingCompleted sampai CancelInputs
 }
 
 -----------------------
@@ -78,14 +84,74 @@ task.spawn(function()
 end)
 
 -----------------------
--- BLATANT TESTER LOOP
--- Per cast (thread utama):
---   Charge({time}) -> RequestMinigame(1,0,time2)
--- Thread lain per cast:
---   wait CompleteDelay -> FishingCompleted()
---   wait CancelDelay   -> CancelInputs()
+-- BLATANT TESTER CORE
 -----------------------
 local Tester = { running = false }
+
+-- Firesignal '!' palsu ke Head kita, hanya supaya handler lokal & visual trigger
+local function FireFakeExclaim()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local head = char:FindFirstChild("Head")
+    if not head then return end
+
+    local data = {
+        UUID = HttpService:GenerateGUID(false),
+        Channel = "Neverm1ndExclaim", -- tanda milik kita
+        TextData = {
+            AttachTo  = head,
+            Text      = "!",
+            EffectType = "Exclaim",
+            TextColor = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.new(0.7647059, 1, 0.3333333)),
+                ColorSequenceKeypoint.new(1, Color3.new(0.7647059, 1, 0.3333333)),
+            }),
+        },
+        Duration  = 0.5,
+        Container = head,
+        __Fake    = true, -- flag milik kita
+    }
+
+    -- panggil semua handler OnClientEvent (termasuk handler kita sendiri) seolah-olah server mengirim '!'
+    firesignal(Events.textEffect.OnClientEvent, data)
+end
+
+-- Handler '!' milik kita → gunakan fake '!' sebagai trigger
+Events.textEffect.OnClientEvent:Connect(function(data)
+    if not Tester.running then return end
+    if not data or not data.TextData then return end
+    if data.TextData.EffectType ~= "Exclaim" then return end
+
+    -- pastikan ini '!' buatan script kita, bukan dari server:
+    if not data.__Fake and data.Channel ~= "Neverm1ndExclaim" then
+        return
+    end
+
+    -- ambil delay dari Config (tanpa clamp/safety)
+    local completeDelay = tonumber(Config.CompleteDelay) or 0
+    local cancelDelay   = tonumber(Config.CancelDelay) or 0
+
+    task.spawn(function()
+        -- tunggu CompleteDelay sebelum FishingCompleted
+        if completeDelay > 0 then
+            task.wait(completeDelay)
+        end
+
+        -- FishingCompleted 1x
+        pcall(function()
+            Events.finish:FireServer()
+        end)
+
+        -- tunggu CancelDelay sebelum CancelInputs
+        if cancelDelay > 0 then
+            task.wait(cancelDelay)
+        end
+
+        pcall(function()
+            Events.cancelInputs:InvokeServer()
+        end)
+    end)
+end)
 
 local function StartBlatantTester()
     if Tester.running then return end
@@ -94,7 +160,7 @@ local function StartBlatantTester()
     task.spawn(function()
         while Tester.running do
             pcall(function()
-                -- 1) ChargeFishingRod sekali (pakai {time} seperti logmu)
+                -- 1) ChargeFishingRod sekali (pakai {time} seperti di log)
                 local t1 = workspace:GetServerTimeNow()
                 Events.charge:InvokeServer({ t1 })
 
@@ -102,33 +168,11 @@ local function StartBlatantTester()
                 local t2 = workspace:GetServerTimeNow()
                 Events.minigame:InvokeServer(1, 0, t2)
 
-                -- 3) Ambil delay dari Config (tanpa clamp/safety)
-                local completeDelay = tonumber(Config.CompleteDelay) or 0
-                local cancelDelay   = tonumber(Config.CancelDelay) or 0
+                -- 3) Segera kirim fake '!' ke head (visual + trigger handler kita)
+                FireFakeExclaim()
 
-                -- 4) Thread penyelesaian untuk cast ini
-                task.spawn(function()
-                    if completeDelay > 0 then
-                        task.wait(completeDelay)
-                    end
-
-                    -- FishingCompleted 1x
-                    pcall(function()
-                        Events.finish:FireServer()
-                    end)
-
-                    if cancelDelay > 0 then
-                        task.wait(cancelDelay)
-                    end
-
-                    -- CancelFishingInputs 1x
-                    pcall(function()
-                        Events.cancelInputs:InvokeServer()
-                    end)
-                end)
-
-                -- 5) Cast berikutnya dijadwalkan di frame berikutnya
-                task.wait() -- minimal yield 1 frame
+                -- 4) Cast berikutnya dijadwalkan di frame berikutnya
+                task.wait()
             end)
         end
     end)
@@ -136,7 +180,7 @@ end
 
 local function StopBlatantTester()
     Tester.running = false
-    -- thread penyelesaian yang sudah ter-spawn akan selesai sendiri
+    -- thread penyelesaian dari handler '!' akan selesai sendiri
 end
 
 -----------------------
@@ -145,10 +189,10 @@ end
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 local Window = WindUI:CreateWindow({
-    Title  = "Blatant Tester (Flow Remote Penuh)",
+    Title  = "Blatant Tester ('!' Fake)",
     Icon   = "fish",
     Author = "by YOU",
-    Folder = "BlatantTester_RemoteFlow",
+    Folder = "BlatantTester_FakeExclaim",
     Size   = UDim2.fromOffset(500, 260),
     Theme  = "Indigo",
     KeySystem = false
@@ -157,7 +201,7 @@ local Window = WindUI:CreateWindow({
 WindUI:SetNotificationLower(true)
 WindUI:Notify({
     Title   = "Loaded",
-    Content = "Blatant Tester (Charge+Minigame main loop, Complete+Cancel di task.spawn) siap.\nEquip pancing manual, lalu ON.",
+    Content = "Blatant Tester (Charge+Minigame main loop, fake '!' trigger Complete/Cancel) siap.\nEquip pancing manual, lalu ON.",
     Duration= 6,
     Icon    = "circle-check"
 })
@@ -241,9 +285,9 @@ local TesterSection = MainTab:Section({
 
 TesterSection:Toggle({
     Title   = "Blatant Tester",
-    Content = "ON: Charge({t}) -> Minigame(1,0,t2) di main loop.\n" ..
-              "Setiap cast spawn task: wait CompleteDelay -> FishingCompleted -> wait CancelDelay -> Cancel.\n" ..
-              "OFF: stop spawn cast baru (task lama tetap selesai).",
+    Content = "ON: Charge({t}) + Minigame(1,0,t2) di main loop, lalu fake '!' ke Head.\n" ..
+              "Handler '!' buatan kita: wait CompleteDelay -> FishingCompleted -> wait CancelDelay -> Cancel.\n" ..
+              "OFF: stop cast baru (thread penyelesaian yang sudah jalan tetap selesai).",
     Value   = Config.TesterEnabled,
     Callback = function(v)
         Config.TesterEnabled = v
@@ -258,11 +302,11 @@ TesterSection:Toggle({
 
 TesterSection:Input({
     Title       = "Complete Delay (detik)",
-    Content     = "Jeda dari RequestMinigame sampai FishingCompleted (boleh 0, isi ANGKA).",
+    Content     = "Jeda setelah fake '!' sebelum FishingCompleted (boleh 0).",
     Placeholder = tostring(Config.CompleteDelay),
     Callback    = function(v)
         local n = tonumber(v)
-        if n then
+        if n ~= nil then
             Config.CompleteDelay = n
             print("[Tester] CompleteDelay =", n)
         else
@@ -273,11 +317,11 @@ TesterSection:Input({
 
 TesterSection:Input({
     Title       = "Cancel Delay (detik)",
-    Content     = "Jeda dari FishingCompleted sampai CancelInputs (boleh 0, isi ANGKA).",
+    Content     = "Jeda dari FishingCompleted sampai CancelInputs (boleh 0).",
     Placeholder = tostring(Config.CancelDelay),
     Callback    = function(v)
         local n = tonumber(v)
-        if n then
+        if n ~= nil then
             Config.CancelDelay = n
             print("[Tester] CancelDelay =", n)
         else
@@ -331,7 +375,7 @@ local function createNeverm1ndGui(parent)
         ColorSequenceKeypoint.new(1, Color3.new(0.137255,0.137255,0.137255))
     }
 
-    local ImageLabel6 = Instance.new("ImageLabel", Frame1)
+    local ImageLabel6 = Instance.new("ImageLabel")
     ImageLabel6.Name = "imege"
     ImageLabel6.BackgroundTransparency = 1
     ImageLabel6.BorderSizePixel = 0
@@ -340,6 +384,7 @@ local function createNeverm1ndGui(parent)
     ImageLabel6.Size        = UDim2.new(1, -6, 1, -6)
     ImageLabel6.Image       = "rbxassetid://100651748260650"
     ImageLabel6.ScaleType   = Enum.ScaleType.Fit
+    ImageLabel6.Parent      = Frame1
 
     local ImageCorner = Instance.new("UICorner", ImageLabel6)
     ImageCorner.CornerRadius = UDim.new(0, 13)
@@ -389,13 +434,14 @@ local function createNeverm1ndGui(parent)
         end
     end)
 
-    local TextButton7 = Instance.new("TextButton", Frame1)
+    local TextButton7 = Instance.new("TextButton")
     TextButton7.Name = "togl"
     TextButton7.Size = UDim2.new(0, 55, 0, 55)
     TextButton7.BackgroundTransparency = 1
     TextButton7.BorderSizePixel = 0
     TextButton7.TextTransparency = 1
     TextButton7.ZIndex = 9999999
+    TextButton7.Parent = Frame1
 
     TextButton7.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
@@ -424,6 +470,23 @@ local function createNeverm1ndGui(parent)
     return screenGui
 end
 
+local function destroyOldNeverm1nd()
+    for _, gui in ipairs(CoreGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Name == "Neverm1nd" then
+            gui:Destroy()
+        end
+    end
+    pcall(function()
+        if typeof(gethui) == "function" then
+            local hui = gethui()
+            if typeof(hui) == "Instance" then
+                local old = hui:FindFirstChild("Neverm1nd")
+                if old then old:Destroy() end
+            end
+        end
+    end)
+end
+
 destroyOldNeverm1nd()
 
 local parentForNeverm1nd = CoreGui
@@ -436,10 +499,10 @@ pcall(function()
     end
 end)
 
-neverGui = createNeverm1ndGui(parentForNeverm1nd)
-toggleButton = neverGui:WaitForChild("main"):WaitForChild("togl")
+local neverGui = createNeverm1ndGui(parentForNeverm1nd)
+local toggleButton = neverGui:WaitForChild("main"):WaitForChild("togl")
 toggleButton.MouseButton1Click:Connect(function()
     setMainVisible(not uiVisible)
 end)
 
-print("[BlatantTester_PureFlow] Script loaded.")
+print("[BlatantTester_FakeExclaim] Script loaded.")
