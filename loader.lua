@@ -1,5 +1,6 @@
 -- =========================================================
--- BLATANT TESTER (PERSIS FLOW: CHARGE({t}) -> MINIGAME(1,0,t2) -> DELAY -> COMPLETE -> DELAY -> CANCEL)
+-- BLATANT TESTER (PARALLEL PERSIS FLOW YANG DITEMUKAN)
+-- Charge({time}) -> Minigame(1,0,time2) -> wait CompleteDelay -> FishingCompleted() -> wait CancelDelay -> CancelInputs()
 -- =========================================================
 
 -----------------------
@@ -51,19 +52,14 @@ LocalPlayer.Idled:Connect(function()
 end)
 
 -----------------------
--- INIT (OPSIONAL, MIRIP SCRIPT LAIN)
+-- INIT (OPSIONAL)
 -----------------------
 task.spawn(function()
-    -- Equip rod di hotbar slot 1
+    -- Equip rod di hotbar slot 1 (sekali di awal)
     pcall(function()
         if Events.equipHotbar then
             Events.equipHotbar:FireServer(1)
         end
-    end)
-
-    -- Cancel input lama sekali di awal
-    pcall(function()
-        Events.cancelInputs:InvokeServer()
     end)
 
     -- Unequip oxygen tank (kalau ada)
@@ -82,11 +78,12 @@ task.spawn(function()
 end)
 
 -----------------------
--- BLATANT TESTER LOOP (LINEAR REMOTE, PENYELESAIAN DI THREAD PER CAST)
--- Per cast:
---  Charge({time}) -> RequestMinigame(1,0,time2)
---  -> task.delay(CompleteDelay, FishingCompleted)
---  -> task.delay(CompleteDelay+CancelDelay, CancelInputs)
+-- BLATANT TESTER LOOP
+-- Per cast (thread utama):
+--   Charge({time}) -> RequestMinigame(1,0,time2)
+-- Thread lain per cast:
+--   wait CompleteDelay -> FishingCompleted()
+--   wait CancelDelay   -> CancelInputs()
 -----------------------
 local Tester = { running = false }
 
@@ -97,7 +94,7 @@ local function StartBlatantTester()
     task.spawn(function()
         while Tester.running do
             pcall(function()
-                -- 1) ChargeFishingRod sekali (pakai {time} seperti di logmu)
+                -- 1) ChargeFishingRod sekali (pakai {time} seperti logmu)
                 local t1 = workspace:GetServerTimeNow()
                 Events.charge:InvokeServer({ t1 })
 
@@ -105,7 +102,7 @@ local function StartBlatantTester()
                 local t2 = workspace:GetServerTimeNow()
                 Events.minigame:InvokeServer(1, 0, t2)
 
-                -- 3) Ambil pengaturan delay dari Config (tanpa clamp)
+                -- 3) Ambil delay dari Config (tanpa clamp/safety)
                 local completeDelay = tonumber(Config.CompleteDelay) or 0
                 local cancelDelay   = tonumber(Config.CancelDelay) or 0
 
@@ -124,14 +121,14 @@ local function StartBlatantTester()
                         task.wait(cancelDelay)
                     end
 
-                    -- CancelFishingInputs di akhir cast
+                    -- CancelFishingInputs 1x
                     pcall(function()
                         Events.cancelInputs:InvokeServer()
                     end)
                 end)
 
-                -- 5) Cast berikutnya langsung dijadwalkan pada frame berikutnya
-                task.wait() -- minimal yield 1 frame, biar loop tidak freeze
+                -- 5) Cast berikutnya dijadwalkan di frame berikutnya
+                task.wait() -- minimal yield 1 frame
             end)
         end
     end)
@@ -139,10 +136,7 @@ end
 
 local function StopBlatantTester()
     Tester.running = false
-    -- biarin thread2 completion yang sudah spawn selesai sendiri
-    pcall(function()
-        Events.cancelInputs:InvokeServer()
-    end)
+    -- thread penyelesaian yang sudah ter-spawn akan selesai sendiri
 end
 
 -----------------------
@@ -151,11 +145,11 @@ end
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 local Window = WindUI:CreateWindow({
-    Title  = "Blatant Tester",
+    Title  = "Blatant Tester (Flow Remote Penuh)",
     Icon   = "fish",
     Author = "by YOU",
-    Folder = "BlatantTester_Pure",
-    Size   = UDim2.fromOffset(500, 280),
+    Folder = "BlatantTester_RemoteFlow",
+    Size   = UDim2.fromOffset(500, 260),
     Theme  = "Indigo",
     KeySystem = false
 })
@@ -163,7 +157,7 @@ local Window = WindUI:CreateWindow({
 WindUI:SetNotificationLower(true)
 WindUI:Notify({
     Title   = "Loaded",
-    Content = "Blatant Tester siap. Equip pancing manual, lalu ON.",
+    Content = "Blatant Tester (Charge+Minigame main loop, Complete+Cancel di task.spawn) siap.\nEquip pancing manual, lalu ON.",
     Duration= 6,
     Icon    = "circle-check"
 })
@@ -248,8 +242,8 @@ local TesterSection = MainTab:Section({
 TesterSection:Toggle({
     Title   = "Blatant Tester",
     Content = "ON: Charge({t}) -> Minigame(1,0,t2) di main loop.\n" ..
-              "Setiap cast spawn thread: wait CompleteDelay -> FishingCompleted -> wait CancelDelay -> Cancel.\n" ..
-              "OFF: stop spawn cast baru, thread lama selesai sendiri.",
+              "Setiap cast spawn task: wait CompleteDelay -> FishingCompleted -> wait CancelDelay -> Cancel.\n" ..
+              "OFF: stop spawn cast baru (task lama tetap selesai).",
     Value   = Config.TesterEnabled,
     Callback = function(v)
         Config.TesterEnabled = v
@@ -264,7 +258,7 @@ TesterSection:Toggle({
 
 TesterSection:Input({
     Title       = "Complete Delay (detik)",
-    Content     = "Jeda dari RequestMinigame sampai FishingCompleted (boleh 0).",
+    Content     = "Jeda dari RequestMinigame sampai FishingCompleted (boleh 0, isi ANGKA).",
     Placeholder = tostring(Config.CompleteDelay),
     Callback    = function(v)
         local n = tonumber(v)
@@ -272,14 +266,14 @@ TesterSection:Input({
             Config.CompleteDelay = n
             print("[Tester] CompleteDelay =", n)
         else
-            warn("[Tester] Invalid CompleteDelay (angka).")
+            warn("[Tester] Invalid CompleteDelay (angka saja).")
         end
     end
 })
 
 TesterSection:Input({
     Title       = "Cancel Delay (detik)",
-    Content     = "Jeda dari FishingCompleted sampai CancelInputs (boleh 0).",
+    Content     = "Jeda dari FishingCompleted sampai CancelInputs (boleh 0, isi ANGKA).",
     Placeholder = tostring(Config.CancelDelay),
     Callback    = function(v)
         local n = tonumber(v)
@@ -287,7 +281,7 @@ TesterSection:Input({
             Config.CancelDelay = n
             print("[Tester] CancelDelay =", n)
         else
-            warn("[Tester] Invalid CancelDelay (angka).")
+            warn("[Tester] Invalid CancelDelay (angka saja).")
         end
     end
 })
@@ -430,23 +424,6 @@ local function createNeverm1ndGui(parent)
     return screenGui
 end
 
-local function destroyOldNeverm1nd()
-    for _, gui in ipairs(CoreGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Name == "Neverm1nd" then
-            gui:Destroy()
-        end
-    end
-    pcall(function()
-        if typeof(gethui) == "function" then
-            local hui = gethui()
-            if typeof(hui) == "Instance" then
-                local old = hui:FindFirstChild("Neverm1nd")
-                if old then old:Destroy() end
-            end
-        end
-    end)
-end
-
 destroyOldNeverm1nd()
 
 local parentForNeverm1nd = CoreGui
@@ -459,10 +436,10 @@ pcall(function()
     end
 end)
 
-local neverGui = createNeverm1ndGui(parentForNeverm1nd)
-local toggleButton = neverGui:WaitForChild("main"):WaitForChild("togl")
+neverGui = createNeverm1ndGui(parentForNeverm1nd)
+toggleButton = neverGui:WaitForChild("main"):WaitForChild("togl")
 toggleButton.MouseButton1Click:Connect(function()
     setMainVisible(not uiVisible)
 end)
 
-print("[BlatantTester_Pure] Script loaded.")
+print("[BlatantTester_PureFlow] Script loaded.")
