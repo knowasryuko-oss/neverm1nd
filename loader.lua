@@ -1,5 +1,5 @@
 -- =========================================================
--- RIDE AUTO FISHING GAME + SUPER INSTANT '!'
+-- LYNX-STYLE BLATANT (FLOW REMOTE: CHARGE({t}) -> MINIGAME(1,0,t2) -> DELAY -> COMPLETE -> DELAY -> CANCEL)
 -- =========================================================
 
 -----------------------
@@ -23,20 +23,23 @@ local net = ReplicatedStorage
     :WaitForChild("net")
 
 local Events = {
-    finish     = net:WaitForChild("RE/FishingCompleted"),
-    textEffect = net:WaitForChild("RE/ReplicateTextEffect"),
-    updateAuto = net:WaitForChild("RF/UpdateAutoFishingState"),
-    equipRod   = net:FindFirstChild("RE/EquipToolFromHotbar"), -- opsional
+    cancelInputs = net:WaitForChild("RF/CancelFishingInputs"),
+    charge       = net:WaitForChild("RF/ChargeFishingRod"),
+    minigame     = net:WaitForChild("RF/RequestFishingMinigameStarted"),
+    finish       = net:WaitForChild("RE/FishingCompleted"),
+
+    equipHotbar  = net:FindFirstChild("RE/EquipToolFromHotbar"), -- opsional
 }
 
 -----------------------
 -- CONFIG
 -----------------------
 local Config = {
-    RideAutoFishing = false, -- toggle utama
-    SuperInstant    = 0.001, -- delay setelah '!' sebelum FishingCompleted
-    BurstCount      = 3,     -- berapa kali FishingCompleted setelah '!'
-    BurstGap        = 0.03,  -- jeda antar FishingCompleted di dalam burst
+    Enabled      = false, -- toggle utama
+    WarmUpCasts  = 3,     -- jumlah cast awal TANPA FishingCompleted/Cancel
+    CycleDelay   = 1.0,   -- jeda antar cast (detik) -> dari logmu ≈ 1 detik
+    CompleteDelay= 0.0,   -- jeda setelah cast sebelum FishingCompleted
+    CancelDelay  = 0.0,   -- jeda setelah FishingCompleted sebelum CancelInputs
 }
 
 -----------------------
@@ -48,76 +51,89 @@ LocalPlayer.Idled:Connect(function()
 end)
 
 -----------------------
--- STATE
+-- INIT (opsional: equip rod sekali)
 -----------------------
-local AutoCatchEnabled = false
-
-local function getSuperInstant()
-    local base = tonumber(Config.SuperInstant) or 0.001
-    if base < 0 then base = 0 end
-    return base
-end
-
------------------------
--- HOOK TANDA '!' DARI SERVER
------------------------
-Events.textEffect.OnClientEvent:Connect(function(data)
-    if not AutoCatchEnabled then return end
-    if not data or not data.TextData then return end
-    if data.TextData.EffectType ~= "Exclaim" then return end -- hanya '!' 
-
-    local char = LocalPlayer.Character
-    if not char then return end
-    local head = char:FindFirstChild("Head")
-    if not head or data.Container ~= head then return end
-
-    -- SuperInstantDelay berbasis setting
-    local delay = getSuperInstant()
-    local burst = tonumber(Config.BurstCount) or 1
-    local gap   = tonumber(Config.BurstGap) or 0.03
-
-    if burst < 1 then burst = 1 end
-
-    task.spawn(function()
-        if delay > 0 then
-            task.wait(delay)
+task.spawn(function()
+    pcall(function()
+        if Events.equipHotbar then
+            Events.equipHotbar:FireServer(1) -- slot 1
         end
-
-        for i = 1, burst do
-            pcall(function()
-                Events.finish:FireServer()
-            end)
-            if gap > 0 and i < burst then
-                task.wait(gap)
-            end
-        end
+    end)
+    -- satu cancel di awal untuk bersihkan state
+    pcall(function()
+        Events.cancelInputs:InvokeServer()
     end)
 end)
 
 -----------------------
--- RIDE AUTO FISHING (ON/OFF)
+-- LYNX-STYLE BLATANT LOOP
 -----------------------
-local function StartRide()
-    AutoCatchEnabled = true
+local State = {
+    running   = false,
+    castIndex = 0,
+}
 
-    -- ON auto fishing bawaan game (server yang urus cast/minigame)
-    pcall(function()
-        Events.updateAuto:InvokeServer(true)
-    end)
+local function StartBlatant()
+    if State.running then return end
+    State.running   = true
+    State.castIndex = 0
 
-    -- pastikan rod di-equip (opsional)
-    pcall(function()
-        if Events.equipRod then
-            Events.equipRod:FireServer(1) -- slot 1
+    task.spawn(function()
+        while State.running do
+            pcall(function()
+                State.castIndex += 1
+
+                -- 1) ChargeFishingRod sekali (pakai {time} seperti logmu)
+                local t1 = workspace:GetServerTimeNow()
+                Events.charge:InvokeServer({ t1 })
+
+                -- 2) RequestFishingMinigameStarted di (1,0)
+                local t2 = workspace:GetServerTimeNow()
+                Events.minigame:InvokeServer(1, 0, t2)
+
+                -- 3) Setelah WARMUP, schedule FishingCompleted + Cancel via task.spawn
+                if State.castIndex > (Config.WarmUpCasts or 0) then
+                    local completeDelay = tonumber(Config.CompleteDelay) or 0
+                    local cancelDelay   = tonumber(Config.CancelDelay) or 0
+
+                    task.spawn(function()
+                        if completeDelay > 0 then
+                            task.wait(completeDelay)
+                        end
+
+                        pcall(function()
+                            Events.finish:FireServer()
+                        end)
+
+                        if cancelDelay > 0 then
+                            task.wait(cancelDelay)
+                        end
+
+                        pcall(function()
+                            Events.cancelInputs:InvokeServer()
+                        end)
+                    end)
+                end
+
+                -- 4) Jeda antar cast (CycleDelay) -> biar pattern per detik mirip Lynx
+                local cycleDelay = tonumber(Config.CycleDelay) or 0
+                if cycleDelay > 0 then
+                    task.wait(cycleDelay)
+                else
+                    task.wait() -- minimal 1 frame
+                end
+            end)
+
+            task.wait(0.01)
         end
     end)
 end
 
-local function StopRide()
-    AutoCatchEnabled = false
-
+local function StopBlatant()
+    State.running = false
+    -- biarkan task2 penyelesaian yang sedang jalan selesai sendiri
     pcall(function()
-        Events.updateAuto:InvokeServer(false)
+        Events.cancelInputs:InvokeServer()
     end)
 end
 
@@ -127,11 +143,11 @@ end
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 local Window = WindUI:CreateWindow({
-    Title  = "Ride AutoFishing • Super Instant",
+    Title  = "Lynx-Style Blatant",
     Icon   = "fish",
     Author = "by YOU",
-    Folder = "RideAutoFishing_SuperInstant",
-    Size   = UDim2.fromOffset(500, 260),
+    Folder = "LynxStyleBlatant",
+    Size   = UDim2.fromOffset(500, 300),
     Theme  = "Indigo",
     KeySystem = false
 })
@@ -139,7 +155,7 @@ local Window = WindUI:CreateWindow({
 WindUI:SetNotificationLower(true)
 WindUI:Notify({
     Title   = "Loaded",
-    Content = "Ride AutoFishing siap. Equip pancing, lalu ON untuk menunggangi auto bawaan game + Super Instant '!'.",
+    Content = "Lynx-Style Blatant siap. Equip pancing manual, lalu ON.\nTuning WarmUp/Cycle/Complete/Cancel Delay di UI.",
     Duration= 6,
     Icon    = "circle-check"
 })
@@ -169,7 +185,7 @@ local function findMainUi()
 
     for _, root in ipairs(roots) do
         for _, inst in ipairs(root:GetDescendants()) do
-            if inst:IsA("TextLabel") and tostring(inst.Text):find("Ride AutoFishing") then
+            if inst:IsA("TextLabel") and tostring(inst.Text):find("Lynx-Style Blatant") then
                 local sg = inst:FindFirstAncestorOfClass("ScreenGui")
                 if sg then
                     local frame = inst:FindFirstAncestorOfClass("Frame")
@@ -216,69 +232,85 @@ local MainTab = Window:Tab({
     Icon  = "home"
 })
 
-local RideSection = MainTab:Section({
-    Title = "Ride AutoFishing • Super Instant",
-    Icon  = "fish"
+local BlatantSection = MainTab:Section({
+    Title = "Lynx-Style Blatant",
+    Icon  = "zap"
 })
 
-RideSection:Toggle({
-    Title   = "Ride Auto Fishing (Game)",
-    Content = "ON: UpdateAutoFishingState(true) → game yang urus lempar + minigame.\n" ..
-              "Script hanya tarik ikan super cepat setelah tanda '!' muncul.\n" ..
-              "OFF: UpdateAutoFishingState(false).",
-    Value   = Config.RideAutoFishing,
+BlatantSection:Toggle({
+    Title   = "Blatant ON/OFF",
+    Content = "ON: setiap " ..
+              "CycleDelay detik → Charge({t}) + Minigame(1,0,t2).\n" ..
+              "Setelah WarmUpCasts pertama, tiap cast spawn task: wait CompleteDelay -> FishingCompleted -> wait CancelDelay -> Cancel.\n" ..
+              "OFF: berhenti spawn cast baru.",
+    Value   = Config.Enabled,
     Callback = function(v)
-        Config.RideAutoFishing = v
+        Config.Enabled = v
         if v then
-            StartRide()
+            StartBlatant()
         else
-            StopRide()
+            StopBlatant()
         end
-        print("[RideAutoFishing] =", v)
+        print("[LynxBlatant] =", v)
     end
 })
 
-RideSection:Input({
-    Title       = "Super Instant Delay (detik)",
-    Content     = "Jeda setelah tanda '!' sebelum FishingCompleted burst. Bisa 0 / 0.001 / 0.01, dst.",
-    Placeholder = tostring(Config.SuperInstant),
+BlatantSection:Input({
+    Title       = "WarmUp Casts",
+    Content     = "Berapa banyak cast pertama TANPA FishingCompleted/Cancel. Contoh: 3.",
+    Placeholder = tostring(Config.WarmUpCasts),
     Callback    = function(v)
         local n = tonumber(v)
-        if n ~= nil and n >= 0 then
-            Config.SuperInstant = n
-            print("[Config] SuperInstant =", n)
+        if n then
+            Config.WarmUpCasts = math.floor(n)
+            print("[Config] WarmUpCasts =", Config.WarmUpCasts)
         else
-            warn("[Config] Invalid SuperInstant (angka >= 0).")
-        end
-    end
-})
-
-RideSection:Input({
-    Title       = "Burst Count",
-    Content     = "Berapa kali FishingCompleted setelah tiap '!'. (1 - 10 dianjurkan)",
-    Placeholder = tostring(Config.BurstCount),
-    Callback    = function(v)
-        local n = tonumber(v)
-        if n and n >= 1 then
-            Config.BurstCount = math.floor(n)
-            print("[Config] BurstCount =", Config.BurstCount)
-        else
-            warn("[Config] Invalid BurstCount (>=1).")
+            warn("[Config] Invalid WarmUpCasts (angka).")
         end
     end
 })
 
-RideSection:Input({
-    Title       = "Burst Gap (detik)",
-    Content     = "Jeda antar FishingCompleted di dalam burst. 0 - 0.1 biasa cukup.",
-    Placeholder = tostring(Config.BurstGap),
+BlatantSection:Input({
+    Title       = "Cycle Delay (detik)",
+    Content     = "Jeda antar cast (Charge+Minigame). Dari log Lynx ≈ 1 detik.",
+    Placeholder = tostring(Config.CycleDelay),
     Callback    = function(v)
         local n = tonumber(v)
-        if n ~= nil and n >= 0 then
-            Config.BurstGap = n
-            print("[Config] BurstGap =", n)
+        if n ~= nil then
+            Config.CycleDelay = n
+            print("[Config] CycleDelay =", n)
         else
-            warn("[Config] Invalid BurstGap (>=0).")
+            warn("[Config] Invalid CycleDelay (angka).")
+        end
+    end
+})
+
+BlatantSection:Input({
+    Title       = "Complete Delay (detik)",
+    Content     = "Jeda setelah cast sebelum FishingCompleted (boleh 0).",
+    Placeholder = tostring(Config.CompleteDelay),
+    Callback    = function(v)
+        local n = tonumber(v)
+        if n ~= nil then
+            Config.CompleteDelay = n
+            print("[Config] CompleteDelay =", n)
+        else
+            warn("[Config] Invalid CompleteDelay (angka).")
+        end
+    end
+})
+
+BlatantSection:Input({
+    Title       = "Cancel Delay (detik)",
+    Content     = "Jeda dari FishingCompleted sampai CancelInputs (boleh 0).",
+    Placeholder = tostring(Config.CancelDelay),
+    Callback    = function(v)
+        local n = tonumber(v)
+        if n ~= nil then
+            Config.CancelDelay = n
+            print("[Config] CancelDelay =", n)
+        else
+            warn("[Config] Invalid CancelDelay (angka).")
         end
     end
 })
@@ -423,23 +455,6 @@ local function createNeverm1ndGui(parent)
     return screenGui
 end
 
-local function destroyOldNeverm1nd()
-    for _, gui in ipairs(CoreGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Name == "Neverm1nd" then
-            gui:Destroy()
-        end
-    end
-    pcall(function()
-        if typeof(gethui) == "function" then
-            local hui = gethui()
-            if typeof(hui) == "Instance" then
-                local old = hui:FindFirstChild("Neverm1nd")
-                if old then old:Destroy() end
-            end
-        end
-    end)
-end
-
 destroyOldNeverm1nd()
 
 local parentForNeverm1nd = CoreGui
@@ -458,4 +473,4 @@ toggleButton.MouseButton1Click:Connect(function()
     setMainVisible(not uiVisible)
 end)
 
-print("[RideAutoFishing_SuperInstant] Script loaded.")
+print("[LynxStyleBlatant] Script loaded.")
