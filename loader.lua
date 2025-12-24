@@ -1,5 +1,5 @@
 -- =========================================================
--- BLATANT TESTER ONLY (FLOW: CHARGE x2 -> MINIGAME(1,0) -> DELAY -> COMPLETE -> DELAY -> CANCEL)
+-- BLATANT TESTER ONLY (1x CHARGE, (1,0), COMPLETE & CANCEL DELAY MANUAL)
 -- =========================================================
 
 -----------------------
@@ -51,7 +51,7 @@ LocalPlayer.Idled:Connect(function()
 end)
 
 -----------------------
--- INIT (OPSIONAL, MIRIP ATOMIC)
+-- INIT (OPSIONAL, MIRIP SCRIPT LAIN)
 -----------------------
 task.spawn(function()
     -- Equip rod di hotbar slot 1
@@ -61,7 +61,7 @@ task.spawn(function()
         end
     end)
 
-    -- Cancel input lama
+    -- Cancel input lama sekali di awal
     pcall(function()
         Events.cancelInputs:InvokeServer()
     end)
@@ -82,10 +82,11 @@ task.spawn(function()
 end)
 
 -----------------------
--- BLATANT TESTER LOOP (TANPA '!')
--- Flow:
--- Cancel -> Charge x2 -> RequestMinigame(1,0) ->
--- wait CompleteDelay -> FishingCompleted -> wait CancelDelay -> Cancel
+-- BLATANT TESTER LOOP
+-- Flow per siklus:
+--  Charge({time}) -> RequestMinigame(1,0,time2)
+--  -> wait CompleteDelay -> FishingCompleted()
+--  -> wait CancelDelay -> CancelInputs()
 -----------------------
 local Tester = { running = false }
 
@@ -96,47 +97,41 @@ local function StartBlatantTester()
     task.spawn(function()
         while Tester.running do
             pcall(function()
-                -- 1) CancelFishingInputs (bersihkan state)
-                pcall(function()
-                    Events.cancelInputs:InvokeServer()
-                end)
-
-                -- 2) ChargeFishingRod x2 (hold & release)
+                -- 1) ChargeFishingRod sekali (pakai {time} seperti log HttpSpy)
                 local t1 = workspace:GetServerTimeNow()
-                Events.charge:InvokeServer(nil, nil, nil, t1)
-                task.wait(0.25) -- durasi hold; bisa kamu kecilkan/besarkan
+                Events.charge:InvokeServer({ t1 })
 
+                -- 2) RequestFishingMinigameStarted di (1,0)
                 local t2 = workspace:GetServerTimeNow()
-                Events.charge:InvokeServer(nil, nil, nil, t2)
+                Events.minigame:InvokeServer(1, 0, t2)
 
-                -- 3) RequestFishingMinigameStarted di (1,0) seperti log HttpSpy
-                local x, y = 1, 0
-                local t3 = workspace:GetServerTimeNow()
-                Events.minigame:InvokeServer(x, y, t3)
-
-                -- 4) CompleteDelay: tunggu sebelum FishingCompleted
+                -- 3) CompleteDelay: tunggu sebelum FishingCompleted
                 local cd = tonumber(Config.CompleteDelay) or 0.45
                 if cd < 0 then cd = 0 end
                 if cd > 5 then cd = 5 end
-                task.wait(cd)
+                if cd > 0 then
+                    task.wait(cd)
+                end
 
-                -- 5) FishingCompleted sekali
+                -- 4) FishingCompleted sekali
                 pcall(function()
                     Events.finish:FireServer()
                 end)
 
-                -- 6) CancelDelay: tunggu sebelum CancelInputs lagi
+                -- 5) CancelDelay: tunggu sebelum CancelInputs
                 local cdel = tonumber(Config.CancelDelay) or 0.30
                 if cdel < 0 then cdel = 0 end
                 if cdel > 5 then cdel = 5 end
-                task.wait(cdel)
+                if cdel > 0 then
+                    task.wait(cdel)
+                end
 
-                -- 7) CancelFishingInputs untuk nutup sesi
+                -- 6) CancelFishingInputs untuk nutup sesi
                 pcall(function()
                     Events.cancelInputs:InvokeServer()
                 end)
 
-                -- jeda sangat kecil supaya tidak terlalu flood
+                -- jeda kecil supaya tidak terlalu flood
                 task.wait(0.02)
             end)
 
@@ -161,7 +156,7 @@ local Window = WindUI:CreateWindow({
     Title  = "Blatant Tester",
     Icon   = "fish",
     Author = "by YOU",
-    Folder = "BlatantTesterOnly",
+    Folder = "BlatantTester_1Charge",
     Size   = UDim2.fromOffset(500, 300),
     Theme  = "Indigo",
     KeySystem = false
@@ -170,7 +165,7 @@ local Window = WindUI:CreateWindow({
 WindUI:SetNotificationLower(true)
 WindUI:Notify({
     Title   = "Loaded",
-    Content = "Blatant Tester siap. Equip pancing manual, lalu ON.",
+    Content = "Blatant Tester (1x Charge) siap. Equip pancing manual, lalu ON.",
     Duration= 6,
     Icon    = "circle-check"
 })
@@ -254,7 +249,7 @@ local TesterSection = MainTab:Section({
 
 TesterSection:Toggle({
     Title   = "Blatant Tester",
-    Content = "ON: Cancel -> Charge x2 -> Minigame(1,0) -> wait CompleteDelay -> FishingCompleted -> wait CancelDelay -> Cancel.\nOFF: berhenti & cancel state.",
+    Content = "ON: Charge({time}) -> Minigame(1,0,time2) -> wait CompleteDelay -> FishingCompleted -> wait CancelDelay -> Cancel.\nOFF: berhenti & cancel state.",
     Value   = Config.TesterEnabled,
     Callback = function(v)
         Config.TesterEnabled = v
@@ -470,4 +465,4 @@ toggleButton.MouseButton1Click:Connect(function()
     setMainVisible(not uiVisible)
 end)
 
-print("[BlatantTesterOnly-NoHide/NoAnimStop] Script loaded.")
+print("[BlatantTester_1Charge] Script loaded.")
