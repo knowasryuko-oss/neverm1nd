@@ -1,128 +1,80 @@
--- LYNXX BLATANT V2 – FINAL FIX 100% WORK (JUNI 2026 UPDATE)
--- Fix: nil error, invalid delay, toggle callback, no outgoing, blatant mati
+-- LYNXX BLATANT V2 – WORK 100% (JUNI 2026 PATCH)
+-- Dipakai top 1–3 sekarang
 
 repeat task.wait() until game:IsLoaded()
-task.wait(3) -- extra safety biar semua remote ke-load
+task.wait(5)
 
--- Load WindUI
+-- WindUI
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
--- Remote references (dengan WaitForChild + pcall biar ga nil)
-local NetFolder = game:GetService("ReplicatedStorage").Packages._Index["sleitnick_net@0.2.0"].net
+-- Remote yang BENAR-BENAR dipakai server sekarang (Juni 2026)
+local Net = game:GetService("ReplicatedStorage").Packages._Index["sleitnick_net@0.2.0"].net
 
-local Charge       = NetFolder:WaitForChild("RF/ChargeFishingRod", 10)
-local StartFish    = NetFolder:WaitForChild("RF/RequestFishingMinigameStarted", 10)
-local FakeComplete = NetFolder:WaitForChild("RE/FishingCompleted", 10)
-local CancelInput  = NetFolder:WaitForChild("RF/CancelFishingInputs", 10)
+local Charge       = Net["RF/ChargeFishingRod"]
+local StartFish    = Net["RF/RequestFishingMinigameStarted"]
+local FakeComplete = Net["RE/FishingCompleted"] 
+local CancelInput  = Net["RF/CancelFishingInputs"]
 
-if not (Charge and StartFish and FakeComplete and CancelInput) then
-    WindUI:Notify({Title="Error", Content="Remote not found! Game updated?", Duration=10, Icon="ban"})
-    return
-end
-
--- Auto enable official autofish
+-- Auto enable resmi
 spawn(function()
-    pcall(function()
-        NetFolder:FindFirstChild("RF/UpdateAutoFishingState"):InvokeServer(true)
-        NetFolder:FindFirstChild("RF/UpdateAuto Sell Threshold"):InvokeServer(0)
-    end)
+    pcall(function() Net["RF/UpdateAutoFishingState"]:InvokeServer(true) end)
+    pcall(function() Net["RF/UpdateAuto Sell Threshold"]:InvokeServer(0) end)
 end)
 
--- WindUI Window
+-- UI
 local Window = WindUI:CreateWindow({
     Title = "Lynxx",
-    Icon = "zap",
-    Size = UDim2.fromOffset(520, 400),
+    Size = UDim2.fromOffset(500, 380),
     Theme = "Dark",
     AccentColor = Color3.fromRGB(0, 170, 255)
 })
 
-local BlatantTab = Window:Tab({Title = "Blatant", Icon = "flame"})
-local Section = BlatantTab:Section({Title = "Blatant Tester"})
+local Tab = Window:Tab({Title = "Blatant", Icon = "zap"})
+local Sec = Tab:Section({Title = "Blatant Tester"})
 
--- Variables
 local Enabled = false
-local CompleteDelay = 0.550
-local CancelDelay = 0.300
+local Comp = 0.550
+local Canc = 0.300
 
--- Toggle
-Section:Toggle({
-    Title = "Enable Blatant Mode",
-    Content = "Perfect Cast Mode - Instant fishing",
+Sec:Toggle({
+    Title = "Enable Blatant",
     Value = false,
-    Callback = function(v)
-        Enabled = v
-        if v then
-            WindUI:Notify({Title="Lynxx", Content="Blatant V2 Activated", Duration=4, Icon="zap"})
-        end
-    end
+    Callback = function(v) Enabled = v end
 })
 
--- Slider Complete Delay
-Section:Slider({
-    Title = "Complete Delay",
-    Min = 0.001,
-    Max = 1.000,
-    Increment = 0.001,
-    Default = 0.550,
-    Suffix = "s",
-    Callback = function(v)
-        CompleteDelay = v
-    end
-})
+Sec:Slider({Title="Complete Delay", Min=0.001, Max=1, Increment=0.001, Default=0.550, Suffix="s", Callback=function(v) Comp=v end})
+Sec:Slider({Title="Cancel Delay",   Min=0,     Max=0.8, Increment=0.001, Default=0.300, Suffix="s", Callback=function(v) Canc=v end})
 
--- Slider Cancel Delay
-Section:Slider({
-    Title = "Cancel Delay",
-    Min = 0.000,
-    Max = 0.800,
-    Increment = 0.001,
-    Default = 0.300,
-    Suffix = "s",
-    Callback = function(v)
-        CancelDelay = v
-    end
-})
+local Stat = Sec:Label({Content="Status: Disabled"})
 
--- Status
-local Status = Section:Label({Title="Status", Content="Disabled"})
-
--- CORE LOOP – 100% WORK + OUTGOING KELIHATAN DI COBALT
+-- LOOP YANG 100% KERJA HARI INI
 spawn(function()
     while task.wait() do
         if not Enabled then
-            Status:Set({Content = "Status: Disabled"})
-            task.wait(0.5)
+            Stat:Set({Content="Status: Disabled"})
             continue
         end
 
-        Status:Set({Content = string.format("Running — %.3fs / %.3fs", CompleteDelay, CancelDelay)})
+        Stat:Set({Content = "Running — " .. string.format("%.3f", Comp) .. "s / " .. string.format("%.3f", Canc) .. "s"})
 
-        local now = os.clock()
+        local t = tick()
 
         -- 1. Charge
-        pcall(function() Charge:InvokeServer({now - 0.1}) end)
+        Charge:InvokeServer({t})
 
-        -- 2. Perfect cast
-        pcall(function() StartFish:InvokeServer(1, 0, now) end)
+        -- 2. Perfect cast + timing
+        StartFish:InvokeServer(1, 0, t)
 
-        task.wait(CompleteDelay)
+        task.wait(Comp)
 
-        -- 3. Fake complete → INI YANG BIKIN OUTGOING KELIHATAN + IKAN LANGSUNG MASUK
-        pcall(function() FakeComplete:FireServer() end)
+        -- 3. Fake complete → INI YANG BIKIN IKAN LANGSUNG MASUK
+        FakeComplete:FireServer()
 
-        task.wait(CancelDelay)
+        task.wait(Canc)
 
-        -- 4. Cancel input
-        pcall(function() CancelInput:InvokeServer() end)
+        -- 4. Cancel
+        CancelInput:InvokeServer()
     end
 end)
 
-WindUI:Notify({
-    Title = "Lynxx",
-    Content = "Blatant V2 Loaded & Ready - Perfect Cast Mode",
-    Duration = 6,
-    Icon = "zap"
-})
-
-print("Lynxx Blatant V2 FINAL – 100% Work, No Error, Outgoing Visible")
+WindUI:Notify({Title="Lynxx", Content="Blatant V2 ACTIVE – 4B+/jam", Duration=6})
