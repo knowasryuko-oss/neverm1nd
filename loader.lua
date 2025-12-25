@@ -1,4 +1,3 @@
--- ZiaanHub - Blatant Tester (Pure Lynxx Flow)
 repeat task.wait() until game:IsLoaded()
 
 -- Load WindUI (ZiaanHub style)
@@ -25,7 +24,7 @@ finish = net:WaitForChild("RE/FishingCompleted"),
 cancel = net:WaitForChild("RF/CancelFishingInputs"),
 }
 
--- Window (satu fitur: Blatant Tester)
+-- Window: 1 fitur saja (Blatant Tester)
 local Window = WindUI:CreateWindow({
 Title = "ZiaanHub - Blatant Tester (Lynxx)",
 Icon = "fish",
@@ -41,7 +40,7 @@ WindUI:SetNotificationLower(true)
 local Tab = Window:Tab({ Title = "Blatant Tester", Icon = "zap" })
 local Section = Tab:Section({ Title = "Fishing Blatant (Pure Lynxx)", Icon = "fish" })
 
--- Config (lynxx-style)
+-- Config (ala Lynxx)
 local cfg = {
 hotbarSlot = 1, -- slot rod
 chargeWait = 0.05, -- jeda kecil setelah charge sebelum minigame
@@ -49,8 +48,8 @@ recastDelay = 0.18, -- jeda antar siklus
 
 text
 
-completeDelay = 0.00,    -- delay sebelum FishingCompleted
-cancelDelay   = 0.00,    -- delay sebelum CancelFishingInputs
+completeDelay = 0.00,     -- delay sebelum RE/FishingCompleted
+cancelDelay   = 0.00,     -- delay sebelum RF/CancelFishingInputs
 
 castMode      = "Cobalt", -- "Cobalt", "Perfect", "Random"
 jitterRange   = 0.00005,  -- untuk Perfect
@@ -70,7 +69,7 @@ end
 
 local function computeCastXY()
 if cfg.castMode == "Cobalt" then
--- persis sample cobalt
+-- persis sample Cobalt
 return 1, 0
 elseif cfg.castMode == "Perfect" then
 local baseX, baseY = -0.7499996423721313, 1
@@ -121,12 +120,13 @@ local x, y = computeCastXY()
 local tMini = workspace:GetServerTimeNow()
 invokeMinigame(x, y, tMini)
 
--- Debug ala Lynxx: charge delta
-local d = tMini - tCharge
+-- Log ala Lynxx
+local delta = tMini - tCharge
 if cfg.verbose then
-    print(tag, string.format("ChargeΔ=%.3fs | XY=(%.6f, %.6f) | complete=%.3f cancel=%.3f", d, x, y, cfg.completeDelay, cfg.cancelDelay))
+    print(tag, string.format("ChargeΔ=%.3fs | XY=(%.6f, %.6f) | complete=%.3f | cancel=%.3f",
+        delta, x, y, cfg.completeDelay, cfg.cancelDelay))
 else
-    print(string.format("%s Charge Δ: %.3fs", tag, d))
+    print(string.format("%s Charge Δ: %.3fs", tag, delta))
 end
 
 -- Complete → Cancel
@@ -157,7 +157,7 @@ pcall(function() if Remotes.unequip then Remotes.unequip:FireServer() end end)
 WindUI:Notify({ Title = "Blatant Tester", Content = "Stopped", Duration = 2, Icon = "square" })
 end
 
--- UI controls (hanya fishing blatant)
+-- UI controls (cuma 1 fitur)
 Section:Toggle({
 Title = "Start Blatant Tester",
 Content = "Charge → Minigame → Complete → Cancel (timer-only)",
@@ -168,13 +168,13 @@ end
 
 Section:Input({
 Title = "Complete Delay (s)",
-Content = "Default 0.00 (sesuai UI Lynxx)",
+Content = "Default 0.00 (UI Lynxx)",
 Placeholder = "0.00",
 Callback = function(value)
 local n = tonumber(value)
 if n then
 cfg.completeDelay = math.max(0, n)
-WindUI:Notify({ Title = "Set", Content = "Complete Delay = " .. string.format("%.3f", cfg.completeDelay), Duration = 2, Icon = "circle-check" })
+WindUI:Notify({ Title = "Set", Content = ("Complete Delay = %.3f"):format(cfg.completeDelay), Duration = 2, Icon = "circle-check" })
 else
 WindUI:Notify({ Title = "Error", Content = "Invalid number", Duration = 2, Icon = "ban" })
 end
@@ -183,20 +183,19 @@ end
 
 Section:Input({
 Title = "Cancel Delay (s)",
-Content = "Default 0.00 (sesuai UI Lynxx)",
+Content = "Default 0.00 (UI Lynxx)",
 Placeholder = "0.00",
 Callback = function(value)
 local n = tonumber(value)
 if n then
 cfg.cancelDelay = math.max(0, n)
-WindUI:Notify({ Title = "Set", Content = "Cancel Delay = " .. string.format("%.3f", cfg.cancelDelay), Duration = 2, Icon = "circle-check" })
+WindUI:Notify({ Title = "Set", Content = ("Cancel Delay = %.3f"):format(cfg.cancelDelay), Duration = 2, Icon = "circle-check" })
 else
 WindUI:Notify({ Title = "Error", Content = "Invalid number", Duration = 2, Icon = "ban" })
 end
 end
 })
 
--- Opsional kecil yang berguna saat debug (boleh dipakai atau diabaikan)
 Section:Input({
 Title = "Recast Delay (s)",
 Content = "Default 0.18",
@@ -205,7 +204,7 @@ Callback = function(value)
 local n = tonumber(value)
 if n then
 cfg.recastDelay = math.max(0, n)
-WindUI:Notify({ Title = "Set", Content = "Recast Delay = " .. string.format("%.3f", cfg.recastDelay), Duration = 2, Icon = "circle-check" })
+WindUI:Notify({ Title = "Set", Content = ("Recast Delay = %.3f"):format(cfg.recastDelay), Duration = 2, Icon = "circle-check" })
 else
 WindUI:Notify({ Title = "Error", Content = "Invalid number", Duration = 2, Icon = "ban" })
 end
@@ -220,7 +219,7 @@ Callback = function(value)
 local n = tonumber(value)
 if n then
 cfg.chargeWait = math.max(0, n)
-WindUI:Notify({ Title = "Set", Content = "Charge Wait = " .. string.format("%.3f", cfg.chargeWait), Duration = 2, Icon = "circle-check" })
+WindUI:Notify({ Title = "Set", Content = ("Charge Wait = %.3f"):format(cfg.chargeWait), Duration = 2, Icon = "circle-check" })
 else
 WindUI:Notify({ Title = "Error", Content = "Invalid number", Duration = 2, Icon = "ban" })
 end
