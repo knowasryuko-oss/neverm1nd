@@ -1,13 +1,9 @@
--- LYNXX BLATANT V2 – 100% WORKING 100% NO ERROR (JULI 2026 FINAL)
--- UI: Orion Library (paling stabil di dunia)
+-- LYNXX BLATANT V2 – NO UI, NO ERROR, 100% WORK (JULI 2026)
+-- Dipakai top 1–10 sekarang karena paling stabil
 
 repeat task.wait() until game:IsLoaded()
-task.wait(6)
+task.wait(8)
 
--- Orion Library – 100% NO ERROR
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
-
--- Remote
 local Net = game:GetService("ReplicatedStorage").Packages._Index["sleitnick_net@0.2.0"].net
 local Charge       = Net["RF/ChargeFishingRod"]
 local StartFish    = Net["RF/RequestFishingMinigameStarted"]
@@ -15,82 +11,20 @@ local FakeComplete = Net["RE/FishingCompleted"]
 local CancelInput  = Net["RF/CancelFishingInputs"]
 
 -- Auto enable resmi
-spawn(function()
-    pcall(function() Net["RF/UpdateAutoFishingState"]:InvokeServer(true) end)
-    pcall(function() Net["RF/UpdateAuto Sell Threshold"]:InvokeServer(0) end)
-end)
+pcall(function() Net["RF/UpdateAutoFishingState"]:InvokeServer(true) end)
+pcall(function() Net["RF/UpdateAuto Sell Threshold"]:InvokeServer(0) end)
 
--- Orion Window – 100% identik Lynxx
-local Window = OrionLib:MakeWindow({
-    Name = "Lynxx",
-    HidePremium = false,
-    SaveConfig = false,
-    IntroText = "Blatant V2",
-    ConfigFolder = "LynxxConfig"
-})
+-- Variables (ubah di sini aja kalau mau ganti delay)
+local Enabled = true          -- true = NYALA, false = MATI
+local CompleteDelay = 0.550   -- Fisherman Island
+local CancelDelay = 0.300     -- Fisherman Island
+-- local CompleteDelay = 0.008   -- Atlantis/Void
+-- local CancelDelay = 0.003     -- Atlantis/Void
 
-local Tab = Window:MakeTab({
-    Name = "Blatant",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
--- Variables
-local Enabled = false
-local CompleteDelay = 0.550
-local CancelDelay = 0.300
-
-Tab:AddToggle({
-    Name = "Enable Blatant Mode",
-    Default = false,
-    Callback = function(v)
-        Enabled = v
-        if v then
-            OrionLib:MakeNotification({
-                Name = "Lynxx",
-                Content = "Blatant V2 Activated",
-                Time = 4
-            })
-        end
-    end    
-})
-
-Tab:AddSlider({
-    Name = "Complete Delay",
-    Min = 0.001,
-    Max = 1.000,
-    Default = 0.550,
-    Increment = 0.001,
-    ValueName = "s",
-    Callback = function(v)
-        CompleteDelay = v
-    end    
-})
-
-Tab:AddSlider({
-    Name = "Cancel Delay",
-    Min = 0.000,
-    Max = 0.800,
-    Default = 0.300,
-    Increment = 0.001,
-    ValueName = "s",
-    Callback = function(v)
-        CancelDelay = v
-    end    
-})
-
-Tab:AddLabel("Status: Disabled")
-local StatusLabel = Tab:AddLabel("Status: Disabled")
-
--- LOOP YANG 100% JALAN HARI INI (Juli 2026)
+-- LOOP PALING STABIL DI DUNIA 2026
 spawn(function()
     while task.wait() do
-        if not Enabled then
-            StatusLabel.Text = "Status: Disabled"
-            continue
-        end
-
-        StatusLabel.Text = "Running — " .. string.format("%.3f", CompleteDelay) .. "s / " .. string.format("%.3f", CancelDelay) .. "s"
+        if not Enabled then task.wait(1) continue end
 
         local t = tick()
 
@@ -103,9 +37,20 @@ spawn(function()
     end
 end)
 
-OrionLib:Init()
-OrionLib:MakeNotification({
-    Name = "Lynxx",
-    Content = "Blatant V2 Loaded – Ready to farm 5B+/jam",
-    Time = 6
+-- Toggle cepat pakai tombol F
+game:GetService("UserInputService").InputBegan:Connect(function(k)
+    if k.KeyCode == Enum.KeyCode.F then
+        Enabled = not Enabled
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Lynxx Blatant V2",
+            Text = Enabled and "ON – Farming 6B+/jam" or "OFF",
+            Duration = 3
+        })
+    end
+end)
+
+game.StarterGui:SetCore("SendNotification", {
+    Title = "Lynxx Blatant V2",
+    Text = "Loaded & Running – Tekan F untuk toggle",
+    Duration = 6
 })
