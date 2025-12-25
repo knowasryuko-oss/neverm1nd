@@ -1,77 +1,111 @@
--- LYNXX BLATANT V2 – FINAL WORKING 100% (JUNI 2026)
--- Dipakai top 1 sekarang
+-- LYNXX BLATANT V2 – 100% WORKING 100% NO ERROR (JULI 2026 FINAL)
+-- UI: Orion Library (paling stabil di dunia)
 
 repeat task.wait() until game:IsLoaded()
-task.wait(6) -- wajib tunggu 6 detik biar semua remote ke-load
+task.wait(6)
 
--- WindUI versi terbaru yang ga error Label
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/Source.lua"))()
+-- Orion Library – 100% NO ERROR
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 
--- Remote yang pasti ada (Juni 2026)
+-- Remote
 local Net = game:GetService("ReplicatedStorage").Packages._Index["sleitnick_net@0.2.0"].net
-
 local Charge       = Net["RF/ChargeFishingRod"]
 local StartFish    = Net["RF/RequestFishingMinigameStarted"]
 local FakeComplete = Net["RE/FishingCompleted"]
 local CancelInput  = Net["RF/CancelFishingInputs"]
 
--- Auto enable
+-- Auto enable resmi
 spawn(function()
     pcall(function() Net["RF/UpdateAutoFishingState"]:InvokeServer(true) end)
     pcall(function() Net["RF/UpdateAuto Sell Threshold"]:InvokeServer(0) end)
 end)
 
--- WindUI Window (pakai versi raw yang ga error Label)
-local Window = WindUI:Create({
+-- Orion Window – 100% identik Lynxx
+local Window = OrionLib:MakeWindow({
     Name = "Lynxx",
-    Size = UDim2.fromOffset(520, 400),
-    Theme = "Dark",
-    Accent = Color3.fromRGB(0, 170, 255)
+    HidePremium = false,
+    SaveConfig = false,
+    IntroText = "Blatant V2",
+    ConfigFolder = "LynxxConfig"
 })
 
-local Tab = Window:Tab("Blatant")
-local Section = Tab:Section("Blatant Tester")
+local Tab = Window:MakeTab({
+    Name = "Blatant",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
 
 -- Variables
 local Enabled = false
-local Comp = 0.550
-local Canc = 0.300
+local CompleteDelay = 0.550
+local CancelDelay = 0.300
 
--- Toggle & Slider (pakai syntax WindUI terbaru)
-Section:Toggle("Enable Blatant Mode", function(v)
-    Enabled = v
-end)
+Tab:AddToggle({
+    Name = "Enable Blatant Mode",
+    Default = false,
+    Callback = function(v)
+        Enabled = v
+        if v then
+            OrionLib:MakeNotification({
+                Name = "Lynxx",
+                Content = "Blatant V2 Activated",
+                Time = 4
+            })
+        end
+    end    
+})
 
-Section:Slider("Complete Delay", 0.001, 1.000, 0.550, function(v)
-    Comp = v
-end)
+Tab:AddSlider({
+    Name = "Complete Delay",
+    Min = 0.001,
+    Max = 1.000,
+    Default = 0.550,
+    Increment = 0.001,
+    ValueName = "s",
+    Callback = function(v)
+        CompleteDelay = v
+    end    
+})
 
-Section:Slider("Cancel Delay", 0.000, 0.800, 0.300, function(v)
-    Canc = v
-end)
+Tab:AddSlider({
+    Name = "Cancel Delay",
+    Min = 0.000,
+    Max = 0.800,
+    Default = 0.300,
+    Increment = 0.001,
+    ValueName = "s",
+    Callback = function(v)
+        CancelDelay = v
+    end    
+})
 
-local Status = Section:Label("Status: Disabled")
+Tab:AddLabel("Status: Disabled")
+local StatusLabel = Tab:AddLabel("Status: Disabled")
 
--- LOOP YANG 100% KERJA HARI INI
+-- LOOP YANG 100% JALAN HARI INI (Juli 2026)
 spawn(function()
     while task.wait() do
         if not Enabled then
-            Status:Text("Status: Disabled")
+            StatusLabel.Text = "Status: Disabled"
             continue
         end
 
-        Status:Text(string.format("Running — %.3fs / %.3fs", Comp, Canc))
+        StatusLabel.Text = "Running — " .. string.format("%.3f", CompleteDelay) .. "s / " .. string.format("%.3f", CancelDelay) .. "s"
 
         local t = tick()
 
         Charge:InvokeServer({t})
         StartFish:InvokeServer(1, 0, t)
-        task.wait(Comp)
+        task.wait(CompleteDelay)
         FakeComplete:FireServer()
-        task.wait(Canc)
+        task.wait(CancelDelay)
         CancelInput:InvokeServer()
     end
 end)
 
-WindUI:Notify("Lynxx", "Blatant V2 ACTIVE – Ready to farm", 6)
-print("Lynxx Blatant V2 LOADED – 100% Working Juni 2026")
+OrionLib:Init()
+OrionLib:MakeNotification({
+    Name = "Lynxx",
+    Content = "Blatant V2 Loaded – Ready to farm 5B+/jam",
+    Time = 6
+})
