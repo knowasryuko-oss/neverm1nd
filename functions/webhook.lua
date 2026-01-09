@@ -1,7 +1,11 @@
 -- /functions/webhook.lua
--- Discord webhook sender + event listeners for fish caught.
+-- UPDATED: uses Roblox Thumbnails API for reliable Discord thumbnail + cache.
 
 local Webhook = {}
+
+local THUMB_TTL = 60 * 10
+local thumbCache = {}      -- [assetId] = url or false
+local thumbCacheTime = {}  -- [assetId] = os.clock()
 
 local function tierNameMap()
     return {
@@ -15,12 +19,54 @@ local function tierNameMap()
     }
 end
 
+local function parseAssetId(icon)
+    if type(icon) == "number" then return icon end
+    if type(icon) ~= "string" then return nil end
+    local n = icon:match("rbxassetid://(%d+)")
+    if n then return tonumber(n) end
+    local n2 = icon:match("^(%d+)$")
+    if n2 then return tonumber(n2) end
+    return nil
+end
+
+local function getThumbUrl(ctx, assetId)
+    if not assetId then return nil end
+
+    local t = thumbCacheTime[assetId]
+    if t and (os.clock() - t) < THUMB_TTL then
+        local v = thumbCache[assetId]
+        return (v == false) and nil or v
+    end
+
+    thumbCacheTime[assetId] = os.clock()
+    thumbCache[assetId] = false
+
+    if not ctx.Http.request then
+        return nil
+    end
+
+    local url = ("https://thumbnails.roblox.com/v1/assets?assetIds=%d&size=420x420&format=Png&isCircular=false"):format(assetId)
+    local ok, decodedOrErr = ctx.Http.getJson(ctx.Services.HttpService, url)
+    if not ok or type(decodedOrErr) ~= "table" then
+        return nil
+    end
+
+    local data = decodedOrErr.data
+    local first = type(data) == "table" and data[1] or nil
+    local imageUrl = first and first.imageUrl
+    if type(imageUrl) == "string" and imageUrl ~= "" then
+        thumbCache[assetId] = imageUrl
+        return imageUrl
+    end
+
+    return nil
+end
+
 function Webhook.Init(ctx)
     Webhook._lastSendAt = 0
     Webhook._lastKey = nil
     Webhook._tierNumToName = tierNameMap()
 
-    -- connect triggers once
     if Webhook._connected then return end
     Webhook._connected = true
 
@@ -44,11 +90,9 @@ end
 local function passesTierFilter(ctx, tierNum)
     tierNum = tonumber(tierNum)
     if not tierNum then return false end
-    if not ctx.Utils.anySelected(ctx.State.WebhookTierNumberMap or {}) then
-        -- if UI hasn't set it yet, default allow
-        return true
-    end
-    return (ctx.State.WebhookTierNumberMap[tierNum] == true)
+    local map = ctx.State.WebhookTierNumberMap or {}
+    if not ctx.Utils.anySelected(map) then return false end
+    return map[tierNum] == true
 end
 
 local function mutationFromMetadata(meta)
@@ -102,7 +146,7 @@ local function buildEmbedFish(ctx, entry, weight, mutationName)
         footer = { text = ctx.Utils.footerTextWithTimestamp() },
     }
 
-    -- color per tier
+    -- tier color
     embed.color = (function()
         local tierObj = ctx.TierUtility:GetTier(tierNum)
         if tierObj and tierObj.TierColor then
@@ -116,12 +160,11 @@ local function buildEmbedFish(ctx, entry, weight, mutationName)
         return 0x2F7DFF
     end)()
 
-    -- Thumbnail: simplest fallback (roblox asset delivery is not always previewable)
-    -- Keeping it simple for now; you can upgrade to thumbnails API later.
-    local icon = entry.Data.Icon
-    if type(icon) == "string" or type(icon) == "number" then
-        local url = ("https://www.roblox.com/asset/?id=%s"):format(tostring(icon):gsub("rbxassetid://",""))
-        embed.thumbnail = { url = url }
+    -- thumbnail via thumbnails api
+    local assetId = parseAssetId(entry.Data.Icon)
+    local thumb = getThumbUrl(ctx, assetId)
+    if thumb then
+        embed.thumbnail = { url = thumb }
     end
 
     return embed
@@ -167,13 +210,11 @@ function Webhook.HandleFish(ctx, fishId, fishName, weight, meta)
         return
     end
 
-    -- rate limit
     local now = os.clock()
     if (now - (Webhook._lastSendAt or 0)) < 0.8 then
         return
     end
 
-    -- find fish entry
     local entry = ctx.FishData.GetByIdOrName(ctx, fishId, fishName)
     if not entry or type(entry.Data) ~= "table" then
         return
