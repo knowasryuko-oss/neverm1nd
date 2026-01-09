@@ -1,6 +1,5 @@
 -- /ui/auto.lua
--- UPDATED: adds Standard toggles for AntiAFK, Disable Cutscenes, No Fishing Animations, Hide Fish Popup.
--- Requires modules: anti_afk, cutscene, hide_popup
+-- UPDATED AGAIN: adds "No Fishing Animations" toggle (uses modules.no_anims)
 
 return function(ctx, modules, tab)
     local AutoFishing = modules.auto_fishing
@@ -8,6 +7,7 @@ return function(ctx, modules, tab)
     local AntiAFK = modules.anti_afk
     local Cutscene = modules.cutscene
     local HidePopup = modules.hide_popup
+    local NoAnims = modules.no_anims
 
     -- Blatant
     local secBlatant = tab:Section({ Side = "Left", Collapsed = false })
@@ -124,6 +124,16 @@ return function(ctx, modules, tab)
             end
         end
     }, "DisableCutscenes")
+
+    secStd:Toggle({
+        Name = "No Fishing Animations",
+        Default = false,
+        Callback = function(v)
+            if NoAnims and NoAnims.SetEnabled then
+                NoAnims.SetEnabled(ctx, v)
+            end
+        end
+    }, "NoFishingAnimations")
 
     secStd:Toggle({
         Name = "Hide Fish Popup",
