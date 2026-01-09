@@ -1,5 +1,5 @@
 -- /main.lua
--- Entry point: loads shared ctx + functions + UI from your GitHub repo.
+-- UPDATED: include new modules anti_afk, cutscene, hide_popup.
 
 local BASE_URL = "https://raw.githubusercontent.com/knowasryuko-oss/neverm1nd/main/"
 
@@ -12,14 +12,12 @@ local function requireHttp(relPath)
     return fn()
 end
 
--- Shared
 local buildCtx = requireHttp("shared/ctx.lua")
 local ctx = buildCtx({
     BaseUrl = BASE_URL,
     RequireHttp = requireHttp,
 })
 
--- Functions (modules)
 local modules = {
     fps_booster  = requireHttp("functions/fps_booster.lua"),
     webhook      = requireHttp("functions/webhook.lua"),
@@ -29,9 +27,13 @@ local modules = {
     auto_fishing = requireHttp("functions/auto_fishing.lua"),
     auto_sell    = requireHttp("functions/auto_sell.lua"),
     favorites    = requireHttp("functions/favorites.lua"),
+
+    -- new
+    anti_afk     = requireHttp("functions/anti_afk.lua"),
+    cutscene     = requireHttp("functions/cutscene.lua"),
+    hide_popup   = requireHttp("functions/hide_popup.lua"),
 }
 
--- Init modules (optional)
 for name, mod in pairs(modules) do
     if type(mod) == "table" and type(mod.Init) == "function" then
         local ok, err = pcall(function()
@@ -43,7 +45,6 @@ for name, mod in pairs(modules) do
     end
 end
 
--- UI init (builds window + tabs and wires callbacks)
 local uiInit = requireHttp("ui/init.lua")
 uiInit(ctx, modules)
 
