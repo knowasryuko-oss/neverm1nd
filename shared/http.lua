@@ -1,9 +1,5 @@
 -- /shared/http.lua
--- Executor HTTP wrapper + helpers.
-
-return function(ctx)
-    -- allows calling either as ctx.Http.Request(...) or local Http = require(...)(ctx)
-end
+-- FIXED + improved: clean module (no stray return), adds GET JSON helper.
 
 local Http = {}
 
@@ -62,7 +58,7 @@ function Http.postJson(httpService, url, luaTable)
     return true, res
 end
 
-function Http.get(httpService, url)
+function Http.getBody(url)
     if type(url) ~= "string" or url == "" then
         return false, "no_url"
     end
@@ -85,6 +81,18 @@ function Http.get(httpService, url)
         return false, "no_body"
     end
     return true, body
+end
+
+function Http.getJson(httpService, url)
+    local ok, bodyOrErr = Http.getBody(url)
+    if not ok then
+        return false, bodyOrErr
+    end
+    local decoded = Http.jsonDecode(httpService, bodyOrErr)
+    if not decoded then
+        return false, "json_decode_failed"
+    end
+    return true, decoded
 end
 
 return Http
