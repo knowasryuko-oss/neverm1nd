@@ -1,5 +1,5 @@
 -- /main.lua
--- UPDATED: include new modules anti_afk, cutscene, hide_popup.
+-- UPDATED AGAIN: include no_anims module, and note about zoom issue mitigation.
 
 local BASE_URL = "https://raw.githubusercontent.com/knowasryuko-oss/neverm1nd/main/"
 
@@ -28,10 +28,10 @@ local modules = {
     auto_sell    = requireHttp("functions/auto_sell.lua"),
     favorites    = requireHttp("functions/favorites.lua"),
 
-    -- new
     anti_afk     = requireHttp("functions/anti_afk.lua"),
     cutscene     = requireHttp("functions/cutscene.lua"),
     hide_popup   = requireHttp("functions/hide_popup.lua"),
+    no_anims     = requireHttp("functions/no_anims.lua"),
 }
 
 for name, mod in pairs(modules) do
@@ -44,6 +44,11 @@ for name, mod in pairs(modules) do
         end
     end
 end
+
+-- Mitigate "zoom in / zoom out" on execute:
+-- Some scripts do this by changing Camera FOV or Player.CameraMaxZoomDistance/MinZoomDistance.
+-- We won't change those at all; if you still see zoom changes, it's likely from another script.
+-- (No code here intentionally.)
 
 local uiInit = requireHttp("ui/init.lua")
 uiInit(ctx, modules)
