@@ -1,11 +1,12 @@
 -- /functions/webhook.lua
--- UPDATED: uses Roblox Thumbnails API for reliable Discord thumbnail + cache.
+-- Mutation policy: ONLY official variants via FishCaught VariantId (string).
+-- Special flags (e.g., Shiny=true) are ignored => shown as None.
 
 local Webhook = {}
 
 local THUMB_TTL = 60 * 10
-local thumbCache = {}      -- [assetId] = url or false
-local thumbCacheTime = {}  -- [assetId] = os.clock()
+local thumbCache = {}
+local thumbCacheTime = {}
 
 local function tierNameMap()
     return {
@@ -70,20 +71,28 @@ function Webhook.Init(ctx)
     if Webhook._connected then return end
     Webhook._connected = true
 
+    -- Prefer FishCaught because it contains VariantId (official)
     ctx.Events.fishCaught.OnClientEvent:Connect(function(fishName, data)
         local weight = (type(data) == "table" and data.Weight) or nil
-        Webhook.HandleFish(ctx, nil, fishName, weight, data)
+        local variantId = (type(data) == "table" and type(data.VariantId) == "string" and data.VariantId) or nil
+        Webhook.HandleFish(ctx, nil, fishName, weight, variantId)
     end)
 
+    -- Still listen to obtained notif for fishId/weight, but ignore Shiny flags by policy
     ctx.Events.obtainedNewFishNotif.OnClientEvent:Connect(function(itemId, meta, payload)
         local id = tonumber(itemId) or (type(payload) == "table" and tonumber(payload.ItemId)) or nil
-        local invMeta = nil
+
+        local usedMeta = nil
         if type(payload) == "table" and type(payload.InventoryItem) == "table" and type(payload.InventoryItem.Metadata) == "table" then
-            invMeta = payload.InventoryItem.Metadata
+            usedMeta = payload.InventoryItem.Metadata
+        elseif type(meta) == "table" then
+            usedMeta = meta
         end
-        local usedMeta = (type(invMeta) == "table" and invMeta) or (type(meta) == "table" and meta) or nil
+
         local weight = usedMeta and usedMeta.Weight or nil
-        Webhook.HandleFish(ctx, id, nil, weight, usedMeta)
+
+        -- No official VariantId here (usually), so pass nil => "None"
+        Webhook.HandleFish(ctx, id, nil, weight, nil)
     end)
 end
 
@@ -93,21 +102,6 @@ local function passesTierFilter(ctx, tierNum)
     local map = ctx.State.WebhookTierNumberMap or {}
     if not ctx.Utils.anySelected(map) then return false end
     return map[tierNum] == true
-end
-
-local function mutationFromMetadata(meta)
-    if type(meta) ~= "table" then return "None" end
-    local muts = {}
-    for k, v in pairs(meta) do
-        if k ~= "Weight" and type(k) == "string" and v == true then
-            muts[#muts+1] = k
-        end
-    end
-    table.sort(muts)
-    if #muts > 0 then
-        return table.concat(muts, ", ")
-    end
-    return "None"
 end
 
 local function getFilterActivateText(ctx)
@@ -124,7 +118,7 @@ local function getFilterActivateText(ctx)
     return table.concat(names, ", ")
 end
 
-local function buildEmbedFish(ctx, entry, weight, mutationName)
+local function buildEmbedFish(ctx, entry, weight, variantId)
     local tierNum = tonumber(entry.Data.Tier) or 1
     local rarityName = entry.Data.TierName or Webhook._tierNumToName[tierNum] or "Unknown"
 
@@ -139,14 +133,13 @@ local function buildEmbedFish(ctx, entry, weight, mutationName)
             { name = "Name Fish :", value = tostring(entry.Data.Name or "Unknown"), inline = false },
             { name = "Rarity :", value = tostring(rarityName), inline = false },
             { name = "Weight :", value = ("%s Kg"):format(tostring(weight or "Unknown")), inline = false },
-            { name = "Mutation :", value = tostring(mutationName or "None"), inline = false },
+            { name = "Mutation :", value = tostring(variantId or "None"), inline = false },
             { name = "Sell Price :", value = ("$%s Coins"):format(ctx.Utils.formatPrice(entry.SellPrice or 0)), inline = false },
             { name = "Filter Activate :", value = getFilterActivateText(ctx), inline = false },
         },
         footer = { text = ctx.Utils.footerTextWithTimestamp() },
     }
 
-    -- tier color
     embed.color = (function()
         local tierObj = ctx.TierUtility:GetTier(tierNum)
         if tierObj and tierObj.TierColor then
@@ -160,7 +153,6 @@ local function buildEmbedFish(ctx, entry, weight, mutationName)
         return 0x2F7DFF
     end)()
 
-    -- thumbnail via thumbnails api
     local assetId = parseAssetId(entry.Data.Icon)
     local thumb = getThumbUrl(ctx, assetId)
     if thumb then
@@ -205,7 +197,7 @@ function Webhook.Test(ctx)
     return false
 end
 
-function Webhook.HandleFish(ctx, fishId, fishName, weight, meta)
+function Webhook.HandleFish(ctx, fishId, fishName, weight, variantId)
     if not ctx.Config.WebhookEnabled or ctx.Config.WebhookUrl == "" then
         return
     end
@@ -225,14 +217,13 @@ function Webhook.HandleFish(ctx, fishId, fishName, weight, meta)
         return
     end
 
-    local mutationName = mutationFromMetadata(meta)
-    local key = ("%s|%s|%s"):format(tostring(entry.Data.Id), tostring(weight or "nil"), mutationName)
+    local key = ("%s|%s|%s"):format(tostring(entry.Data.Id), tostring(weight or "nil"), tostring(variantId or "None"))
     if key == Webhook._lastKey then
         return
     end
     Webhook._lastKey = key
 
-    local embed = buildEmbedFish(ctx, entry, weight, mutationName)
+    local embed = buildEmbedFish(ctx, entry, weight, variantId)
     local payload = { username = "Neverm1nd Webhook", embeds = { embed } }
 
     local ok, _ = ctx.Http.postJson(ctx.Services.HttpService, ctx.Config.WebhookUrl, payload)
