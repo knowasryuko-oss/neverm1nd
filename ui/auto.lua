@@ -1,9 +1,13 @@
 -- /ui/auto.lua
--- Auto Fishing tab UI (Blatant + Auto Sell + Standard).
+-- UPDATED: adds Standard toggles for AntiAFK, Disable Cutscenes, No Fishing Animations, Hide Fish Popup.
+-- Requires modules: anti_afk, cutscene, hide_popup
 
 return function(ctx, modules, tab)
     local AutoFishing = modules.auto_fishing
     local AutoSell = modules.auto_sell
+    local AntiAFK = modules.anti_afk
+    local Cutscene = modules.cutscene
+    local HidePopup = modules.hide_popup
 
     -- Blatant
     local secBlatant = tab:Section({ Side = "Left", Collapsed = false })
@@ -84,17 +88,17 @@ return function(ctx, modules, tab)
     local secStd = tab:Section({ Side = "Left", Collapsed = false })
     secStd:Header({ Text = "Standard" })
 
-    -- Anti AFK
     secStd:Toggle({
         Name = "Anti AFK",
         Default = true,
         Callback = function(v)
-            ctx.Config.AntiAFK = v and true or false
-            -- UI layer doesn't implement AFK; you can add a module later if you want.
+            if AntiAFK and AntiAFK.SetEnabled then
+                AntiAFK.SetEnabled(ctx, v)
+            end
         end
     }, "AntiAFK")
 
-    -- One-shot equip rod
+    -- one-shot equip
     local equipToggleRef
     equipToggleRef = secStd:Toggle({
         Name = "Auto Equip Rod",
@@ -110,4 +114,24 @@ return function(ctx, modules, tab)
             end)
         end
     }, "AutoEquipRodOnce")
+
+    secStd:Toggle({
+        Name = "Disable Cutscenes",
+        Default = false,
+        Callback = function(v)
+            if Cutscene and Cutscene.SetEnabled then
+                Cutscene.SetEnabled(ctx, v)
+            end
+        end
+    }, "DisableCutscenes")
+
+    secStd:Toggle({
+        Name = "Hide Fish Popup",
+        Default = false,
+        Callback = function(v)
+            if HidePopup and HidePopup.SetEnabled then
+                HidePopup.SetEnabled(ctx, v)
+            end
+        end
+    }, "HideFishPopup")
 end
