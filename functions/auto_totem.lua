@@ -1,6 +1,6 @@
 -- /functions/auto_totem.lua
 -- Auto 9X Totem spawn (cross pattern, teleport player, restore pos).
--- Fix: inventory totems = array, UUID di field item.UUID
+-- Pola offset: pusat, kanan, kiri, depan, belakang, atas, bawah, kanan-depan, kiri-belakang, dst.
 
 local AutoTotem = {}
 
@@ -10,7 +10,6 @@ function AutoTotem.Init(ctx)
     AutoTotem._running = false
 end
 
--- Ambil list nama totem dari ReplicatedStorage.Totems
 function AutoTotem.GetTotemList()
     local totemFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Totems")
     local list = {}
@@ -28,7 +27,6 @@ function AutoTotem.GetTotemList()
     return list
 end
 
--- Ambil semua UUID dari inventory Totems yang Id-nya sama dengan selectedTotemId
 local function getTotemUUIDs(ctx, totemId)
     local dataRep = ctx.Replion.Client:WaitReplion("Data")
     if not dataRep then return {} end
@@ -45,18 +43,19 @@ local function getTotemUUIDs(ctx, totemId)
     return uuids
 end
 
+-- Pola offset: pusat, kanan, kiri, depan, belakang, atas, bawah, kanan-depan, kiri-belakang, dst.
 local function getOffsets(distance)
     distance = tonumber(distance) or 100
     return {
-        Vector3.new(0, 0, 0),
-        Vector3.new(distance, 0, 0),
-        Vector3.new(-distance, 0, 0),
-        Vector3.new(0, 0, distance),
-        Vector3.new(0, 0, -distance),
-        Vector3.new(distance, 0, distance),
-        Vector3.new(-distance, 0, -distance),
-        Vector3.new(distance, 0, -distance),
-        Vector3.new(-distance, 0, distance),
+        Vector3.new(0, 0, 0), -- pusat
+        Vector3.new(distance, 0, 0), -- kanan
+        Vector3.new(-distance, 0, 0), -- kiri
+        Vector3.new(0, 0, distance), -- depan
+        Vector3.new(0, 0, -distance), -- belakang
+        Vector3.new(0, distance, 0), -- atas
+        Vector3.new(0, -distance, 0), -- bawah
+        Vector3.new(distance, 0, distance), -- kanan-depan
+        Vector3.new(-distance, 0, -distance), -- kiri-belakang
     }
 end
 
@@ -94,9 +93,9 @@ function AutoTotem.Start(ctx, totemId, distance)
         hrp.CFrame = CFrame.new(pos)
         print("[AutoTotem] SPAWN TOTEM:", uuids[i], type(uuids[i]))
         pcall(function()
-            ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i]) -- UUID string!
+            ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i])
         end)
-        task.wait(0.3)
+        task.wait(3) -- delay 3 detik antar spawn
     end
 
     hrp.CFrame = CFrame.new(center)
