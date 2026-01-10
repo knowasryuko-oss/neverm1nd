@@ -1,3 +1,6 @@
+-- /functions/auto_totem.lua
+-- Auto 9X Totem spawn (cross pattern, teleport player, restore pos).
+
 local AutoTotem = {}
 
 AutoTotem._running = false
@@ -6,6 +9,7 @@ function AutoTotem.Init(ctx)
     AutoTotem._running = false
 end
 
+-- Ambil list nama totem dari ReplicatedStorage.Totems
 function AutoTotem.GetTotemList()
     local totemFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Totems")
     local list = {}
@@ -23,6 +27,7 @@ function AutoTotem.GetTotemList()
     return list
 end
 
+-- Ambil semua UUID dari inventory Totems yang Id-nya sama dengan selectedTotemId
 local function getTotemUUIDs(ctx, totemId)
     local dataRep = ctx.Replion.Client:WaitReplion("Data")
     if not dataRep then return {} end
@@ -76,6 +81,7 @@ function AutoTotem.Start(ctx, totemId, distance)
     local offsets = getOffsets(distance)
     local n = math.min(9, #uuids, #offsets)
 
+    -- Pause FPS Booster to avoid re-entrancy
     if ctx.modules and ctx.modules.fps_booster and ctx.modules.fps_booster.Pause then
         ctx.modules.fps_booster.Pause()
     end
@@ -94,6 +100,7 @@ function AutoTotem.Start(ctx, totemId, distance)
     ctx.Notify("success", "9X Totem", "Totem spawn selesai.", 4)
     AutoTotem._running = false
 
+    -- Resume FPS Booster
     if ctx.modules and ctx.modules.fps_booster and ctx.modules.fps_booster.Resume then
         ctx.modules.fps_booster.Resume(ctx)
     end
