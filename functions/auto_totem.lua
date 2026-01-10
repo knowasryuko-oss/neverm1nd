@@ -1,5 +1,5 @@
 -- /functions/auto_totem.lua
--- Auto 9X Totem spawn (rute serong/atas/bawah, offset 120, PlatformStand+NoClip ON, idle 3 detik).
+-- Auto 9X Totem spawn (rute, offset 120, BodyPosition agar player stay di offset, NoClip+PlatformStand ON, idle 3 detik).
 
 local AutoTotem = {}
 
@@ -76,6 +76,16 @@ local function setNoClip(ctx, state)
     end
 end
 
+local function setBodyPosition(hrp, pos)
+    local bp = Instance.new("BodyPosition")
+    bp.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+    bp.Position = pos
+    bp.P = 1e5
+    bp.D = 1e3
+    bp.Parent = hrp
+    return bp
+end
+
 function AutoTotem.Start(ctx, totemId, _distance)
     print("[AutoTotem] Start called", totemId)
     if AutoTotem._running then return end
@@ -109,12 +119,14 @@ function AutoTotem.Start(ctx, totemId, _distance)
     for i = 1, n do
         if not AutoTotem._running then break end
         local pos = center + offsets[i]
-        hrp.CFrame = CFrame.new(pos)
+        local bp = setBodyPosition(hrp, pos)
+        task.wait(0.2) -- biar player benar-benar stay
         print("[AutoTotem] SPAWN TOTEM:", uuids[i], type(uuids[i]))
         pcall(function()
             ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i])
         end)
-        task.wait(3)
+        task.wait(3) -- idle 3 detik di offset
+        bp:Destroy()
     end
 
     hrp.CFrame = CFrame.new(center)
