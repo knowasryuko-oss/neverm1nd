@@ -1,5 +1,6 @@
 -- /functions/auto_totem.lua
 -- Auto 9X Totem spawn (cross pattern, teleport player, restore pos).
+-- Dropdown hanya: "Shiny", "Luck", "Mutation"
 
 local AutoTotem = {}
 
@@ -9,26 +10,13 @@ function AutoTotem.Init(ctx)
     AutoTotem._running = false
 end
 
--- Ambil list nama totem dari ReplicatedStorage.Totems
-function AutoTotem.GetTotemList()
-    local totemFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Totems")
-    local list = {}
-    if totemFolder then
-        for _, mod in ipairs(totemFolder:GetChildren()) do
-            if mod:IsA("ModuleScript") then
-                local ok, data = pcall(function() return require(mod) end)
-                if ok and type(data) == "table" and data.Data and data.Data.Name and data.Data.Id then
-                    list[#list+1] = { label = data.Data.Name, value = data.Data.Id }
-                end
-            end
-        end
-    end
-    table.sort(list, function(a, b) return tostring(a.label) < tostring(b.label) end)
-    return list
+-- List string, sesuai script lain
+function AutoTotem.GetTotemNameList()
+    return { "Shiny", "Luck", "Mutation" }
 end
 
--- Ambil semua UUID dari inventory Totems yang Id-nya sama dengan selectedTotemId
-local function getTotemUUIDs(ctx, totemId)
+-- Ambil semua UUID dari inventory Totems yang Name/Identifier cocok dengan dropdown
+local function getTotemUUIDs(ctx, totemName)
     local dataRep = ctx.Replion.Client:WaitReplion("Data")
     if not dataRep then return {} end
     local inv = dataRep:Get("Inventory")
@@ -36,8 +24,15 @@ local function getTotemUUIDs(ctx, totemId)
     if type(totems) ~= "table" then return {} end
     local uuids = {}
     for uuid, item in pairs(totems) do
-        if item and tonumber(item.Id) == tonumber(totemId) then
-            uuids[#uuids+1] = uuid
+        -- Cek field mana yang cocok dengan dropdown
+        if item then
+            -- Cek Name, Identifier, Type, dsb
+            if (item.Name == totemName)
+            or (item.Identifier == totemName)
+            or (item.Type == totemName)
+            then
+                uuids[#uuids+1] = uuid
+            end
         end
     end
     return uuids
@@ -58,12 +53,12 @@ local function getOffsets(distance)
     }
 end
 
-function AutoTotem.Start(ctx, totemId, distance)
-    print("[AutoTotem] Start called", totemId, distance)
+function AutoTotem.Start(ctx, totemName, distance)
+    print("[AutoTotem] Start called", totemName, distance)
     if AutoTotem._running then return end
     AutoTotem._running = true
 
-    local uuids = getTotemUUIDs(ctx, totemId)
+    local uuids = getTotemUUIDs(ctx, totemName)
     if #uuids == 0 then
         ctx.Notify("warning", "9X Totem", "Tidak ada UUID totem di inventory.", 4)
         AutoTotem._running = false
