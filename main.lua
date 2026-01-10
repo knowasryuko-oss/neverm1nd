@@ -37,6 +37,8 @@ local modules = {
     auto_totem   = requireHttp("functions/auto_totem.lua"),
 }
 
+ctx.modules = modules  -- <--- penting! agar modul bisa saling akses
+
 -- Init modules (optional)
 for name, mod in pairs(modules) do
     if type(mod) == "table" and type(mod.Init) == "function" then
