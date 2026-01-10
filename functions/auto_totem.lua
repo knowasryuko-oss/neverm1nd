@@ -1,10 +1,12 @@
 -- /functions/auto_totem.lua
 -- Auto 9X Totem spawn (cross pattern, teleport player, restore pos).
--- Pola offset: pusat, kanan, kiri, depan, belakang, atas, bawah, kanan-depan, kiri-belakang, dst.
+-- Offset 90, auto fly/walk on water ON/OFF.
 
 local AutoTotem = {}
 
 AutoTotem._running = false
+AutoTotem._flyConn = nil
+AutoTotem._oldPlatform = nil
 
 function AutoTotem.Init(ctx)
     AutoTotem._running = false
@@ -43,20 +45,42 @@ local function getTotemUUIDs(ctx, totemId)
     return uuids
 end
 
--- Pola offset: pusat, kanan, kiri, depan, belakang, atas, bawah, kanan-depan, kiri-belakang, dst.
+-- Pola offset: pusat, kanan, kiri, depan, belakang, atas, bawah, kanan-depan, kiri-belakang
 local function getOffsets(distance)
-    distance = tonumber(distance) or 100
+    distance = tonumber(distance) or 90
     return {
-        Vector3.new(0, 0, 0), -- pusat
-        Vector3.new(distance, 0, 0), -- kanan
-        Vector3.new(-distance, 0, 0), -- kiri
-        Vector3.new(0, 0, distance), -- depan
-        Vector3.new(0, 0, -distance), -- belakang
-        Vector3.new(0, distance, 0), -- atas
-        Vector3.new(0, -distance, 0), -- bawah
-        Vector3.new(distance, 0, distance), -- kanan-depan
-        Vector3.new(-distance, 0, -distance), -- kiri-belakang
+        Vector3.new(0, 0, 0),
+        Vector3.new(distance, 0, 0),
+        Vector3.new(-distance, 0, 0),
+        Vector3.new(0, 0, distance),
+        Vector3.new(0, 0, -distance),
+        Vector3.new(0, distance, 0),
+        Vector3.new(0, -distance, 0),
+        Vector3.new(distance, 0, distance),
+        Vector3.new(-distance, 0, -distance),
     }
+end
+
+-- Simple fly/walk on water: set PlatformStand true, restore after
+local function enableFly(ctx)
+    local char = ctx.LocalPlayer.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    AutoTotem._oldPlatform = hum.PlatformStand
+    hum.PlatformStand = true
+end
+
+local function disableFly(ctx)
+    local char = ctx.LocalPlayer.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    if AutoTotem._oldPlatform ~= nil then
+        hum.PlatformStand = AutoTotem._oldPlatform
+    else
+        hum.PlatformStand = false
+    end
 end
 
 function AutoTotem.Start(ctx, totemId, distance)
@@ -82,6 +106,9 @@ function AutoTotem.Start(ctx, totemId, distance)
     local offsets = getOffsets(distance)
     local n = math.min(9, #uuids, #offsets)
 
+    -- Aktifkan fly/walk on water
+    enableFly(ctx)
+
     -- Pause FPS Booster to avoid re-entrancy
     if ctx.modules and ctx.modules.fps_booster and ctx.modules.fps_booster.Pause then
         ctx.modules.fps_booster.Pause()
@@ -95,10 +122,11 @@ function AutoTotem.Start(ctx, totemId, distance)
         pcall(function()
             ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i])
         end)
-        task.wait(3) -- delay 3 detik antar spawn
+        task.wait(2) -- delay 2 detik antar spawn
     end
 
     hrp.CFrame = CFrame.new(center)
+    disableFly(ctx)
     ctx.Notify("success", "9X Totem", "Totem spawn selesai.", 4)
     AutoTotem._running = false
 
@@ -110,6 +138,7 @@ end
 function AutoTotem.Stop(ctx)
     print("[AutoTotem] Stop called")
     AutoTotem._running = false
+    disableFly(ctx)
 end
 
 return AutoTotem
