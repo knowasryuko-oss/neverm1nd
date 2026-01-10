@@ -1,5 +1,5 @@
 -- /functions/auto_totem.lua
--- Auto 9X Totem spawn (cross pattern, teleport player, idle 3 detik di offset, restore pos).
+-- Auto 9X Totem spawn (bypass offset, tumpuk di pusat, PlatformStand ON saat spawn).
 
 local AutoTotem = {}
 
@@ -42,23 +42,32 @@ local function getTotemUUIDs(ctx, totemId)
     return uuids
 end
 
-local function getOffsets(distance)
-    distance = tonumber(distance) or 90
+-- Offset sangat kecil, semua totem hampir menumpuk di pusat
+local function getOffsets()
+    local d = 0.1
     return {
         Vector3.new(0, 0, 0),
-        Vector3.new(distance, 0, 0),
-        Vector3.new(-distance, 0, 0),
-        Vector3.new(0, 0, distance),
-        Vector3.new(0, 0, -distance),
-        Vector3.new(0, distance, 0),
-        Vector3.new(0, -distance, 0),
-        Vector3.new(distance, 0, distance),
-        Vector3.new(-distance, 0, -distance),
+        Vector3.new(d, 0, 0),
+        Vector3.new(-d, 0, 0),
+        Vector3.new(0, 0, d),
+        Vector3.new(0, 0, -d),
+        Vector3.new(0, d, 0),
+        Vector3.new(0, -d, 0),
+        Vector3.new(d, 0, d),
+        Vector3.new(-d, 0, -d),
     }
 end
 
-function AutoTotem.Start(ctx, totemId, distance)
-    print("[AutoTotem] Start called", totemId, distance)
+local function setPlatformStand(ctx, state)
+    local char = ctx.LocalPlayer.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    hum.PlatformStand = state and true or false
+end
+
+function AutoTotem.Start(ctx, totemId, _distance)
+    print("[AutoTotem] Start called", totemId)
     if AutoTotem._running then return end
     AutoTotem._running = true
 
@@ -77,8 +86,11 @@ function AutoTotem.Start(ctx, totemId, distance)
     end
 
     local center = hrp.Position
-    local offsets = getOffsets(distance)
+    local offsets = getOffsets()
     local n = math.min(9, #uuids, #offsets)
+
+    -- Aktifkan PlatformStand agar player idle di udara/air
+    setPlatformStand(ctx, true)
 
     -- Pause FPS Booster to avoid re-entrancy
     if ctx.modules and ctx.modules.fps_booster and ctx.modules.fps_booster.Pause then
@@ -98,6 +110,7 @@ function AutoTotem.Start(ctx, totemId, distance)
     end
 
     hrp.CFrame = CFrame.new(center)
+    setPlatformStand(ctx, false)
     ctx.Notify("success", "9X Totem", "Totem spawn selesai.", 4)
     AutoTotem._running = false
 
@@ -109,6 +122,7 @@ end
 function AutoTotem.Stop(ctx)
     print("[AutoTotem] Stop called")
     AutoTotem._running = false
+    setPlatformStand(ctx, false)
 end
 
 return AutoTotem
