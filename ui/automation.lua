@@ -1,5 +1,5 @@
 -- /ui/automation.lua
--- Automation tab UI (9X Totem)
+-- Automation tab UI (9X Totem, NO auto-off, aman dari re-entrancy).
 
 return function(ctx, modules, tab)
     local AutoTotem = modules.auto_totem
@@ -55,8 +55,7 @@ return function(ctx, modules, tab)
         end
     })
 
-    local toggleRef
-    toggleRef = sec:Toggle({
+    sec:Toggle({
         Name = "Enable 9X Totem",
         Default = false,
         Callback = function(v)
@@ -72,9 +71,7 @@ return function(ctx, modules, tab)
                     ctx.Notify("info", "9X Totem", "Auto spawn totem dimatikan.", 3)
                 end
             end
-            task.defer(function()
-                pcall(function() toggleRef:UpdateState(false) end)
-            end)
+            -- NO auto-off! (no UpdateState(false))
         end
     }, "AutoTotemToggle")
 end
