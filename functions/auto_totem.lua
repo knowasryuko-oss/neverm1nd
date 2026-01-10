@@ -1,5 +1,5 @@
 -- /functions/auto_totem.lua
--- Auto 9X Totem spawn (offset mirror script lain, NoClip+PlatformStand+BodyPosition+BodyGyro, idle 3 detik).
+-- Auto 9X Totem spawn (offset mirror, tanpa pusat, Anchored+NoClip+PlatformStand ON, idle 3 detik).
 
 local AutoTotem = {}
 
@@ -42,10 +42,9 @@ local function getTotemUUIDs(ctx, totemId)
     return uuids
 end
 
--- Offset mirror dari script lain (relatif terhadap pusat)
+-- Offset mirror dari script lain (tanpa pusat)
 local function getOffsets()
     return {
-        Vector3.new(0, 0, 0),
         Vector3.new(100.6, 0, -8.29),
         Vector3.new(39.59, 0.69, -94.14),
         Vector3.new(0, 101, 0),
@@ -75,22 +74,10 @@ local function setNoClip(ctx, state)
     end
 end
 
-local function setBodyPositionAndGyro(hrp, pos)
-    local bp = Instance.new("BodyPosition")
-    bp.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-    bp.Position = pos
-    bp.P = 1e5
-    bp.D = 1e3
-    bp.Parent = hrp
-
-    local bg = Instance.new("BodyGyro")
-    bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
-    bg.CFrame = CFrame.new(pos)
-    bg.P = 1e5
-    bg.D = 1e3
-    bg.Parent = hrp
-
-    return bp, bg
+local function setAnchored(hrp, state)
+    if hrp then
+        hrp.Anchored = state and true or false
+    end
 end
 
 function AutoTotem.Start(ctx, totemId, _distance)
@@ -114,7 +101,7 @@ function AutoTotem.Start(ctx, totemId, _distance)
 
     local center = hrp.Position
     local offsets = getOffsets()
-    local n = math.min(9, #uuids, #offsets)
+    local n = math.min(8, #uuids, #offsets) -- 8 offset (tanpa pusat)
 
     setNoClip(ctx, true)
     setPlatformStand(ctx, true)
@@ -126,15 +113,14 @@ function AutoTotem.Start(ctx, totemId, _distance)
     for i = 1, n do
         if not AutoTotem._running then break end
         local pos = center + offsets[i]
-        local bp, bg = setBodyPositionAndGyro(hrp, pos)
-        task.wait(0.2)
+        hrp.CFrame = CFrame.new(pos)
+        setAnchored(hrp, true)
         print("[AutoTotem] SPAWN TOTEM:", uuids[i], type(uuids[i]))
         pcall(function()
             ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i])
         end)
         task.wait(3)
-        bp:Destroy()
-        bg:Destroy()
+        setAnchored(hrp, false)
     end
 
     hrp.CFrame = CFrame.new(center)
@@ -151,8 +137,10 @@ end
 function AutoTotem.Stop(ctx)
     print("[AutoTotem] Stop called")
     AutoTotem._running = false
+    local hrp = ctx.LocalPlayer.Character and ctx.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     setNoClip(ctx, false)
     setPlatformStand(ctx, false)
+    setAnchored(hrp, false)
 end
 
 return AutoTotem
