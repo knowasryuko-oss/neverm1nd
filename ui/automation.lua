@@ -1,5 +1,5 @@
 -- /ui/automation.lua
--- Automation tab UI (9X Totem, world-only, fix UUID lookup).
+-- Automation tab UI (9X Totem, dropdown string, fix UUID lookup).
 
 return function(ctx, modules, tab)
     local AutoTotem = modules.auto_totem
@@ -7,9 +7,9 @@ return function(ctx, modules, tab)
     local sec = tab:Section({ Side = "Left", Collapsed = false })
     sec:Header({ Text = "9X Totem" })
 
-    -- Dropdown totem name (label=Name, value=Id)
-    local totemList = AutoTotem.GetTotemList()
-    local selectedTotemId = totemList[1] and totemList[1].value or nil
+    -- Dropdown totem name (list string)
+    local totemList = AutoTotem.GetTotemNameList()
+    local selectedTotemName = totemList[1] or ""
     local distance = 100
 
     sec:Dropdown({
@@ -18,9 +18,9 @@ return function(ctx, modules, tab)
         Multi = false,
         Required = true,
         Options = totemList,
-        Default = selectedTotemId,
-        Callback = function(id)
-            selectedTotemId = id
+        Default = selectedTotemName,
+        Callback = function(name)
+            selectedTotemName = name
         end
     })
 
@@ -40,8 +40,8 @@ return function(ctx, modules, tab)
         Default = false,
         Callback = function(v)
             if v then
-                if AutoTotem and AutoTotem.Start and selectedTotemId then
-                    AutoTotem.Start(ctx, selectedTotemId, distance)
+                if AutoTotem and AutoTotem.Start and selectedTotemName then
+                    AutoTotem.Start(ctx, selectedTotemName, distance)
                     ctx.Notify("info", "9X Totem", "Auto spawn totem aktif.", 3)
                 end
             else
