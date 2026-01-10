@@ -1,5 +1,5 @@
 -- /ui/automation.lua
--- Automation tab UI (9X Totem, dropdown value=Id, label=Name).
+-- Automation tab UI (9X Totem, offset fix 90, tidak ada input manual).
 
 return function(ctx, modules, tab)
     local AutoTotem = modules.auto_totem
@@ -17,7 +17,7 @@ return function(ctx, modules, tab)
     end
     local selectedTotemName = nameList[1] or ""
     local selectedTotemId = nameToId[selectedTotemName]
-    local distance = 100
+    local offset = 90
 
     sec:Dropdown({
         Name = "Totem Name",
@@ -32,24 +32,13 @@ return function(ctx, modules, tab)
         end
     })
 
-    sec:Input({
-        Name = "Jarak antar Totem (studs)",
-        Placeholder = "100",
-        Default = tostring(distance),
-        AcceptedCharacters = "Numeric",
-        Callback = function(text)
-            local n = tonumber(text)
-            if n and n > 0 then distance = n end
-        end
-    })
-
     sec:Toggle({
         Name = "Enable 9X Totem",
         Default = false,
         Callback = function(v)
             if v then
                 if AutoTotem and AutoTotem.Start and selectedTotemId then
-                    AutoTotem.Start(ctx, selectedTotemId, distance)
+                    AutoTotem.Start(ctx, selectedTotemId, offset)
                     ctx.Notify("info", "9X Totem", "Auto spawn totem aktif.", 3)
                 end
             else
