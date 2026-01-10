@@ -1,5 +1,5 @@
 -- /ui/automation.lua
--- Automation tab UI (9X Totem, dropdown string: Shiny, Luck, Mutation).
+-- Automation tab UI (9X Totem, dropdown value=Id, label=Name).
 
 return function(ctx, modules, tab)
     local AutoTotem = modules.auto_totem
@@ -7,9 +7,16 @@ return function(ctx, modules, tab)
     local sec = tab:Section({ Side = "Left", Collapsed = false })
     sec:Header({ Text = "9X Totem" })
 
-    -- Dropdown totem name (list string)
-    local totemList = AutoTotem.GetTotemNameList()
-    local selectedTotemName = totemList[1] or ""
+    -- Dropdown totem name (label=Name, value=Id)
+    local totemList = AutoTotem.GetTotemList()
+    local nameToId = {}
+    local nameList = {}
+    for _, v in ipairs(totemList) do
+        nameToId[v.label] = v.value
+        nameList[#nameList+1] = v.label
+    end
+    local selectedTotemName = nameList[1] or ""
+    local selectedTotemId = nameToId[selectedTotemName]
     local distance = 100
 
     sec:Dropdown({
@@ -17,10 +24,11 @@ return function(ctx, modules, tab)
         Search = true,
         Multi = false,
         Required = true,
-        Options = totemList,
+        Options = nameList,
         Default = selectedTotemName,
         Callback = function(name)
             selectedTotemName = name
+            selectedTotemId = nameToId[name]
         end
     })
 
@@ -40,8 +48,8 @@ return function(ctx, modules, tab)
         Default = false,
         Callback = function(v)
             if v then
-                if AutoTotem and AutoTotem.Start and selectedTotemName then
-                    AutoTotem.Start(ctx, selectedTotemName, distance)
+                if AutoTotem and AutoTotem.Start and selectedTotemId then
+                    AutoTotem.Start(ctx, selectedTotemId, distance)
                     ctx.Notify("info", "9X Totem", "Auto spawn totem aktif.", 3)
                 end
             else
