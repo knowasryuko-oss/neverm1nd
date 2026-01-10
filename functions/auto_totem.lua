@@ -1,5 +1,5 @@
 -- /functions/auto_totem.lua
--- Auto 9X Totem spawn (offset di udara/air, BodyPosition+BodyGyro agar player stay tegak, NoClip+PlatformStand ON, idle 4 detik).
+-- Auto 9X Totem spawn (offset mirror script lain, NoClip+PlatformStand+BodyPosition+BodyGyro, idle 3 detik).
 
 local AutoTotem = {}
 
@@ -42,20 +42,18 @@ local function getTotemUUIDs(ctx, totemId)
     return uuids
 end
 
--- Offset di udara/air, Y = pusat.Y + 5
-local function getOffsets(distance)
-    distance = tonumber(distance) or 120
-    local y = 5
+-- Offset mirror dari script lain (relatif terhadap pusat)
+local function getOffsets()
     return {
-        Vector3.new(-distance, y, distance),    -- serong kiri depan
-        Vector3.new(-distance, y, -distance),   -- serong kiri belakang
-        Vector3.new(distance, y, -distance),    -- serong kanan belakang
-        Vector3.new(0, y, 0),                   -- atas pusat
-        Vector3.new(0, y*2, 0),                 -- lebih atas
-        Vector3.new(0, y*3, 0),                 -- lebih atas lagi
-        Vector3.new(0, -y, 0),                  -- bawah pusat
-        Vector3.new(0, -y*2, 0),                -- lebih bawah
-        Vector3.new(0, -y*3, 0),                -- lebih bawah lagi
+        Vector3.new(0, 0, 0),
+        Vector3.new(100.6, 0, -8.29),
+        Vector3.new(39.59, 0.69, -94.14),
+        Vector3.new(0, 101, 0),
+        Vector3.new(100.6, 101, -8.29),
+        Vector3.new(39.59, 101.69, -94.14),
+        Vector3.new(0, -101, 0),
+        Vector3.new(100.6, -101, -8.29),
+        Vector3.new(39.59, -101.3, -94.14),
     }
 end
 
@@ -115,7 +113,7 @@ function AutoTotem.Start(ctx, totemId, _distance)
     end
 
     local center = hrp.Position
-    local offsets = getOffsets(120)
+    local offsets = getOffsets()
     local n = math.min(9, #uuids, #offsets)
 
     setNoClip(ctx, true)
@@ -134,7 +132,7 @@ function AutoTotem.Start(ctx, totemId, _distance)
         pcall(function()
             ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i])
         end)
-        task.wait(4)
+        task.wait(3)
         bp:Destroy()
         bg:Destroy()
     end
