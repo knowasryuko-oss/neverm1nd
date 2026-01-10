@@ -9,10 +9,6 @@ return function(ctx, modules, tab)
 
     -- Dropdown totem name (label=Name, value=Id)
     local totemList = AutoTotem.GetTotemList()
-    local selectedTotemId = totemList[1] and totemList[1].value or nil
-    local distance = 100
-
-    -- Build list of just names for UI, but keep value=Id
     local nameToId = {}
     local nameList = {}
     for _, v in ipairs(totemList) do
@@ -20,6 +16,8 @@ return function(ctx, modules, tab)
         nameList[#nameList+1] = v.label
     end
     local selectedTotemName = nameList[1] or ""
+    local selectedTotemId = nameToId[selectedTotemName]
+    local distance = 100
 
     sec:Dropdown({
         Name = "Totem Name",
