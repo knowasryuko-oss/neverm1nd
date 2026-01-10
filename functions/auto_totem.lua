@@ -84,7 +84,7 @@ function AutoTotem.Start(ctx, totemName, distance)
     local offsets = getOffsets(distance)
     local n = math.min(9, #uuids, #offsets)
 
-    -- Optional: pause FPS Booster to avoid re-entrancy
+    -- Pause FPS Booster to avoid re-entrancy
     if ctx.modules and ctx.modules.fps_booster and ctx.modules.fps_booster.Pause then
         ctx.modules.fps_booster.Pause()
     end
