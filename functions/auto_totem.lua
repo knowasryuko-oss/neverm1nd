@@ -1,5 +1,6 @@
 -- /functions/auto_totem.lua
 -- Auto 9X Totem spawn (cross pattern, teleport player, restore pos).
+-- Fix: inventory totems = array, UUID di field item.UUID
 
 local AutoTotem = {}
 
@@ -35,9 +36,9 @@ local function getTotemUUIDs(ctx, totemId)
     local totems = inv and inv["Totems"]
     if type(totems) ~= "table" then return {} end
     local uuids = {}
-    for uuid, item in pairs(totems) do
-        if item and tonumber(item.Id) == tonumber(totemId) then
-            uuids[#uuids+1] = uuid
+    for _, item in ipairs(totems) do
+        if item and tonumber(item.Id) == tonumber(totemId) and type(item.UUID) == "string" then
+            uuids[#uuids+1] = item.UUID
         end
     end
     print("[AutoTotem] getTotemUUIDs for Id", totemId, "->", #uuids, "found:", table.concat(uuids, ", "))
