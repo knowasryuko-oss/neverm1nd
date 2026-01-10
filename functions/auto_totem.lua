@@ -1,5 +1,5 @@
 -- /functions/auto_totem.lua
--- Auto 9X Totem spawn (bypass offset, tumpuk di pusat, PlatformStand ON saat spawn).
+-- Auto 9X Totem spawn (bypass offset, NoClip + PlatformStand ON, idle 3 detik di offset, restore pos).
 
 local AutoTotem = {}
 
@@ -42,19 +42,20 @@ local function getTotemUUIDs(ctx, totemId)
     return uuids
 end
 
--- Offset sangat kecil, semua totem hampir menumpuk di pusat
+-- Offset sangat kecil, semua totem hampir menumpuk di pusat, +Y agar tidak nyangkut
 local function getOffsets()
     local d = 0.1
+    local y = 3
     return {
-        Vector3.new(0, 0, 0),
-        Vector3.new(d, 0, 0),
-        Vector3.new(-d, 0, 0),
-        Vector3.new(0, 0, d),
-        Vector3.new(0, 0, -d),
-        Vector3.new(0, d, 0),
-        Vector3.new(0, -d, 0),
-        Vector3.new(d, 0, d),
-        Vector3.new(-d, 0, -d),
+        Vector3.new(0, y, 0),
+        Vector3.new(d, y, 0),
+        Vector3.new(-d, y, 0),
+        Vector3.new(0, y, d),
+        Vector3.new(0, y, -d),
+        Vector3.new(0, y+1, 0),
+        Vector3.new(0, y-1, 0),
+        Vector3.new(d, y, d),
+        Vector3.new(-d, y, -d),
     }
 end
 
@@ -64,6 +65,16 @@ local function setPlatformStand(ctx, state)
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
     hum.PlatformStand = state and true or false
+end
+
+local function setNoClip(ctx, state)
+    local char = ctx.LocalPlayer.Character
+    if not char then return end
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = not state
+        end
+    end
 end
 
 function AutoTotem.Start(ctx, totemId, _distance)
@@ -89,10 +100,9 @@ function AutoTotem.Start(ctx, totemId, _distance)
     local offsets = getOffsets()
     local n = math.min(9, #uuids, #offsets)
 
-    -- Aktifkan PlatformStand agar player idle di udara/air
+    setNoClip(ctx, true)
     setPlatformStand(ctx, true)
 
-    -- Pause FPS Booster to avoid re-entrancy
     if ctx.modules and ctx.modules.fps_booster and ctx.modules.fps_booster.Pause then
         ctx.modules.fps_booster.Pause()
     end
@@ -105,11 +115,11 @@ function AutoTotem.Start(ctx, totemId, _distance)
         pcall(function()
             ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i])
         end)
-        -- Player idle di offset selama 3 detik
         task.wait(3)
     end
 
     hrp.CFrame = CFrame.new(center)
+    setNoClip(ctx, false)
     setPlatformStand(ctx, false)
     ctx.Notify("success", "9X Totem", "Totem spawn selesai.", 4)
     AutoTotem._running = false
@@ -122,6 +132,7 @@ end
 function AutoTotem.Stop(ctx)
     print("[AutoTotem] Stop called")
     AutoTotem._running = false
+    setNoClip(ctx, false)
     setPlatformStand(ctx, false)
 end
 
