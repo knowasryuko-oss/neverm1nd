@@ -122,7 +122,7 @@ function AutoTotem.Start(ctx, totemId, distance)
         pcall(function()
             ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i])
         end)
-        task.wait(2) -- delay 2 detik antar spawn
+        task.wait(2.5) -- delay 2 detik antar spawn
     end
 
     hrp.CFrame = CFrame.new(center)
