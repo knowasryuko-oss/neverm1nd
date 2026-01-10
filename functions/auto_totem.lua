@@ -1,5 +1,5 @@
 -- /functions/auto_totem.lua
--- Auto 9X Totem spawn (bypass offset, NoClip + PlatformStand ON, idle 3 detik di offset, restore pos).
+-- Auto 9X Totem spawn (rute serong/atas/bawah, offset 120, PlatformStand+NoClip ON, idle 3 detik).
 
 local AutoTotem = {}
 
@@ -42,20 +42,19 @@ local function getTotemUUIDs(ctx, totemId)
     return uuids
 end
 
--- Offset sangat kecil, semua totem hampir menumpuk di pusat, +Y agar tidak nyangkut
-local function getOffsets()
-    local d = 0.1
-    local y = 3
+-- Rute: serong kiri depan, serong kiri belakang, serong kanan belakang, ke atas 3x, ke bawah 3x
+local function getOffsets(distance)
+    distance = tonumber(distance) or 120
     return {
-        Vector3.new(0, y, 0),
-        Vector3.new(d, y, 0),
-        Vector3.new(-d, y, 0),
-        Vector3.new(0, y, d),
-        Vector3.new(0, y, -d),
-        Vector3.new(0, y+1, 0),
-        Vector3.new(0, y-1, 0),
-        Vector3.new(d, y, d),
-        Vector3.new(-d, y, -d),
+        Vector3.new(-distance, 0, distance),    -- serong kiri depan
+        Vector3.new(-distance, 0, -distance),   -- serong kiri belakang
+        Vector3.new(distance, 0, -distance),    -- serong kanan belakang
+        Vector3.new(0, distance, 0),            -- ke atas 1
+        Vector3.new(0, distance*2, 0),          -- ke atas lagi
+        Vector3.new(0, distance*3, 0),          -- ke atas lagi
+        Vector3.new(0, -distance, 0),           -- ke bawah 1
+        Vector3.new(0, -distance*2, 0),         -- ke bawah lagi
+        Vector3.new(0, -distance*3, 0),         -- ke bawah lagi
     }
 end
 
@@ -97,7 +96,7 @@ function AutoTotem.Start(ctx, totemId, _distance)
     end
 
     local center = hrp.Position
-    local offsets = getOffsets()
+    local offsets = getOffsets(120)
     local n = math.min(9, #uuids, #offsets)
 
     setNoClip(ctx, true)
