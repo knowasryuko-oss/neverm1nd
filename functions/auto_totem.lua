@@ -1,5 +1,5 @@
 -- /functions/auto_totem.lua
--- Auto 9X Totem spawn (rute serong/atas/bawah, offset 120, BodyPosition+BodyGyro agar player stay tegak di offset, NoClip+PlatformStand ON, idle 3 detik).
+-- Auto 9X Totem spawn (offset di udara/air, BodyPosition+BodyGyro agar player stay tegak, NoClip+PlatformStand ON, idle 4 detik).
 
 local AutoTotem = {}
 
@@ -42,19 +42,20 @@ local function getTotemUUIDs(ctx, totemId)
     return uuids
 end
 
--- Rute: serong kiri depan, serong kiri belakang, serong kanan belakang, ke atas 3x, ke bawah 3x (tanpa pusat)
+-- Offset di udara/air, Y = pusat.Y + 5
 local function getOffsets(distance)
     distance = tonumber(distance) or 120
+    local y = 5
     return {
-        Vector3.new(-distance, 0, distance),    -- serong kiri depan
-        Vector3.new(-distance, 0, -distance),   -- serong kiri belakang
-        Vector3.new(distance, 0, -distance),    -- serong kanan belakang
-        Vector3.new(0, distance, 0),            -- ke atas 1
-        Vector3.new(0, distance*2, 0),          -- ke atas lagi
-        Vector3.new(0, distance*3, 0),          -- ke atas lagi
-        Vector3.new(0, -distance, 0),           -- ke bawah 1
-        Vector3.new(0, -distance*2, 0),         -- ke bawah lagi
-        Vector3.new(0, -distance*3, 0),         -- ke bawah lagi
+        Vector3.new(-distance, y, distance),    -- serong kiri depan
+        Vector3.new(-distance, y, -distance),   -- serong kiri belakang
+        Vector3.new(distance, y, -distance),    -- serong kanan belakang
+        Vector3.new(0, y, 0),                   -- atas pusat
+        Vector3.new(0, y*2, 0),                 -- lebih atas
+        Vector3.new(0, y*3, 0),                 -- lebih atas lagi
+        Vector3.new(0, -y, 0),                  -- bawah pusat
+        Vector3.new(0, -y*2, 0),                -- lebih bawah
+        Vector3.new(0, -y*3, 0),                -- lebih bawah lagi
     }
 end
 
@@ -133,7 +134,7 @@ function AutoTotem.Start(ctx, totemId, _distance)
         pcall(function()
             ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i])
         end)
-        task.wait(3)
+        task.wait(4)
         bp:Destroy()
         bg:Destroy()
     end
