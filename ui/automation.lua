@@ -1,9 +1,5 @@
--- /ui/automation.lua
--- Automation tab UI (9X Totem, NO auto-off, aman dari re-entrancy).
-
 return function(ctx, modules, tab)
     local AutoTotem = modules.auto_totem
-    print("AutoTotem module loaded:", AutoTotem, AutoTotem and AutoTotem.Start, AutoTotem and AutoTotem.Stop)
 
     local sec = tab:Section({ Side = "Left", Collapsed = false })
     sec:Header({ Text = "9X Totem" })
@@ -59,19 +55,18 @@ return function(ctx, modules, tab)
         Name = "Enable 9X Totem",
         Default = false,
         Callback = function(v)
-            print("9X Totem toggle:", v, AutoTotem, AutoTotem and AutoTotem.Start, AutoTotem and AutoTotem.Stop)
+            -- Only act if user really toggles
             if v then
-                if AutoTotem and AutoTotem.Start then
+                if AutoTotem and AutoTotem.Start and not AutoTotem._running then
                     AutoTotem.Start(ctx, selectedTotemName, distance)
                     ctx.Notify("info", "9X Totem", "Auto spawn totem aktif.", 3)
                 end
             else
-                if AutoTotem and AutoTotem.Stop then
+                if AutoTotem and AutoTotem.Stop and AutoTotem._running then
                     AutoTotem.Stop(ctx)
                     ctx.Notify("info", "9X Totem", "Auto spawn totem dimatikan.", 3)
                 end
             end
-            -- NO auto-off! (no UpdateState(false))
         end
     }, "AutoTotemToggle")
 end
