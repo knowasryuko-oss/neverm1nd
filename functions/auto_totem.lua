@@ -1,111 +1,234 @@
--- /functions/auto_totem.lua
--- Auto 9X Totem spawn (cross pattern, teleport player, restore pos).
+-- /functions/fps_booster.lua
+-- One-toggle FPS booster (world-only). Keeps UI normal.
+-- Aman dari re-entrancy, auto disconnect saat 9X Totem ON.
 
-local AutoTotem = {}
+local FpsBooster = {}
 
-AutoTotem._running = false
+function FpsBooster.Init(ctx)
+    FpsBooster._enabled = false
+    FpsBooster._conn = nil
+    FpsBooster._inCallback = false
+    FpsBooster._shouldReconnect = false
 
-function AutoTotem.Init(ctx)
-    AutoTotem._running = false
-end
-
--- Helper: get totem data list from ReplicatedStorage.Totems
-local function getTotemDataList()
-    local totemFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Totems")
-    local list = {}
-    if totemFolder then
-        for _, mod in ipairs(totemFolder:GetChildren()) do
-            if mod:IsA("ModuleScript") then
-                local ok, data = pcall(function() return require(mod) end)
-                if ok and type(data) == "table" and data.Data and data.Data.Name then
-                    list[#list+1] = {
-                        Name = data.Data.Name,
-                        Id = data.Data.Id,
-                        Icon = data.Data.Icon,
-                        Range = data.Range or 100,
-                        Module = mod,
-                    }
-                end
-            end
-        end
-    end
-    table.sort(list, function(a, b) return tostring(a.Name) < tostring(b.Name) end)
-    return list
-end
-
--- Helper: get all UUID of selected totem from inventory
-local function getTotemUUIDs(ctx, totemName)
-    local dataRep = ctx.Replion.Client:WaitReplion("Data")
-    if not dataRep then return {} end
-    local items = dataRep:Get({"Inventory","Items"})
-    if type(items) ~= "table" then return {} end
-    local uuids = {}
-    for _, item in ipairs(items) do
-        if item and item.ItemType == "Totems" and item.Name == totemName and item.UUID then
-            uuids[#uuids+1] = item.UUID
-        end
-    end
-    return uuids
-end
-
--- Helper: cross pattern offsets (center, +X, -X, +Z, -Z, +X+Z, -X-Z, +X-Z, -X+Z)
-local function getOffsets(distance)
-    distance = tonumber(distance) or 100
-    return {
-        Vector3.new(0, 0, 0),
-        Vector3.new(distance, 0, 0),
-        Vector3.new(-distance, 0, 0),
-        Vector3.new(0, 0, distance),
-        Vector3.new(0, 0, -distance),
-        Vector3.new(distance, 0, distance),
-        Vector3.new(-distance, 0, -distance),
-        Vector3.new(distance, 0, -distance),
-        Vector3.new(-distance, 0, distance),
+    FpsBooster._cache = {
+        Lighting = {},
+        PostFx = {},
+        Parts = {},
+        Decals = {},
+        FX = {},
+        HeadScale = nil,
     }
 end
 
-function AutoTotem.Start(ctx, totemName, distance)
-    if AutoTotem._running then return end
-    AutoTotem._running = true
+local function grayscaleColor(c3)
+    local y = (0.299*c3.R) + (0.587*c3.G) + (0.114*c3.B)
+    return Color3.new(y, y, y)
+end
 
-    local uuids = getTotemUUIDs(ctx, totemName)
-    if #uuids == 0 then
-        ctx.Notify("warning", "9X Totem", "Tidak ada UUID totem di inventory.", 4)
-        AutoTotem._running = false
+local function cacheLightingOnce(ctx)
+    if FpsBooster._cache.Lighting._cached then return end
+    FpsBooster._cache.Lighting._cached = true
+
+    local L = ctx.Services.Lighting
+    FpsBooster._cache.Lighting.GlobalShadows = L.GlobalShadows
+    FpsBooster._cache.Lighting.FogStart = L.FogStart
+    FpsBooster._cache.Lighting.FogEnd = L.FogEnd
+    pcall(function() FpsBooster._cache.Lighting.EnvironmentDiffuseScale = L.EnvironmentDiffuseScale end)
+    pcall(function() FpsBooster._cache.Lighting.EnvironmentSpecularScale = L.EnvironmentSpecularScale end)
+end
+
+local function applyLighting(ctx)
+    cacheLightingOnce(ctx)
+    local L = ctx.Services.Lighting
+
+    pcall(function() L.GlobalShadows = false end)
+    pcall(function() L.FogStart = 0 end)
+    pcall(function() L.FogEnd = 9e9 end)
+    pcall(function() L.EnvironmentDiffuseScale = 0 end)
+    pcall(function() L.EnvironmentSpecularScale = 0 end)
+
+    for _, inst in ipairs(L:GetDescendants()) do
+        if inst:IsA("BloomEffect")
+        or inst:IsA("DepthOfFieldEffect")
+        or inst:IsA("SunRaysEffect")
+        or inst:IsA("ColorCorrectionEffect")
+        or inst:IsA("Atmosphere") then
+            if FpsBooster._cache.PostFx[inst] == nil then
+                FpsBooster._cache.PostFx[inst] = { Enabled = inst.Enabled }
+            end
+            pcall(function() inst.Enabled = false end)
+        end
+    end
+end
+
+local function restoreLighting(ctx)
+    local L = ctx.Services.Lighting
+    if not FpsBooster._cache.Lighting._cached then return end
+
+    pcall(function() L.GlobalShadows = FpsBooster._cache.Lighting.GlobalShadows end)
+    pcall(function() L.FogStart = FpsBooster._cache.Lighting.FogStart end)
+    pcall(function() L.FogEnd = FpsBooster._cache.Lighting.FogEnd end)
+    pcall(function() L.EnvironmentDiffuseScale = FpsBooster._cache.Lighting.EnvironmentDiffuseScale end)
+    pcall(function() L.EnvironmentSpecularScale = FpsBooster._cache.Lighting.EnvironmentSpecularScale end)
+
+    for inst, data in pairs(FpsBooster._cache.PostFx) do
+        if typeof(inst) == "Instance" and inst.Parent then
+            pcall(function() inst.Enabled = data.Enabled end)
+        end
+    end
+end
+
+local function applySmallHead(ctx, state)
+    local char = ctx.LocalPlayer.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    local headScale = hum:FindFirstChild("HeadScale")
+    if not headScale then return end
+
+    if FpsBooster._cache.HeadScale == nil then
+        FpsBooster._cache.HeadScale = headScale.Value
+    end
+
+    if state then
+        headScale.Value = 0.5
+    else
+        if type(FpsBooster._cache.HeadScale) == "number" then
+            headScale.Value = FpsBooster._cache.HeadScale
+        end
+    end
+end
+
+local function applyToInstance(inst)
+    if FpsBooster._inCallback then return end
+    FpsBooster._inCallback = true
+
+    -- VFX off
+    if inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam")
+    or inst:IsA("PointLight") or inst:IsA("SpotLight") or inst:IsA("SurfaceLight") then
+        if FpsBooster._cache.FX[inst] == nil then
+            FpsBooster._cache.FX[inst] = { Enabled = inst.Enabled }
+        end
+        pcall(function() inst.Enabled = false end)
+        FpsBooster._inCallback = false
         return
     end
 
-    local hrp = ctx.LocalPlayer.Character and ctx.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then
-        ctx.Notify("warning", "9X Totem", "Tidak bisa ambil posisi player.", 4)
-        AutoTotem._running = false
+    -- hide decals/textures
+    if inst:IsA("Decal") or inst:IsA("Texture") then
+        if FpsBooster._cache.Decals[inst] == nil then
+            FpsBooster._cache.Decals[inst] = { Transparency = inst.Transparency }
+        end
+        pcall(function() inst.Transparency = 1 end)
+        FpsBooster._inCallback = false
         return
     end
 
-    local center = hrp.Position
-    local offsets = getOffsets(distance)
-    local n = math.min(9, #uuids, #offsets)
-
-    for i = 1, n do
-        if not AutoTotem._running then break end
-        local pos = center + offsets[i]
-        -- teleport player
-        hrp.CFrame = CFrame.new(pos)
-        -- spawn totem
+    -- parts -> plastic + no shadow + grayscale
+    if inst:IsA("BasePart") then
+        if FpsBooster._cache.Parts[inst] == nil then
+            FpsBooster._cache.Parts[inst] = {
+                Material = inst.Material,
+                CastShadow = inst.CastShadow,
+                Reflectance = inst.Reflectance,
+                Color = inst.Color,
+            }
+        end
         pcall(function()
-            ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i])
+            inst.Material = Enum.Material.Plastic
+            inst.CastShadow = false
+            inst.Reflectance = 0
+            inst.Color = grayscaleColor(inst.Color)
         end)
-        task.wait(0.3)
     end
 
-    -- restore player to center
-    hrp.CFrame = CFrame.new(center)
-    ctx.Notify("success", "9X Totem", "Totem spawn selesai.", 4)
-    AutoTotem._running = false
+    FpsBooster._inCallback = false
 end
 
-function AutoTotem.Stop(ctx)
-    AutoTotem._running = false
+local function applyAll(ctx)
+    applyLighting(ctx)
+
+    for _, inst in ipairs(workspace:GetDescendants()) do
+        applyToInstance(inst)
+    end
+
+    if FpsBooster._conn then
+        FpsBooster._conn:Disconnect()
+        FpsBooster._conn = nil
+    end
+
+    FpsBooster._conn = workspace.DescendantAdded:Connect(function(inst)
+        if not FpsBooster._enabled then return end
+        applyToInstance(inst)
+    end)
+
+    applySmallHead(ctx, true)
 end
 
-return AutoTotem
+local function restoreAll(ctx)
+    if FpsBooster._conn then
+        FpsBooster._conn:Disconnect()
+        FpsBooster._conn = nil
+    end
+
+    applySmallHead(ctx, false)
+    restoreLighting(ctx)
+
+    for inst, data in pairs(FpsBooster._cache.FX) do
+        if typeof(inst) == "Instance" and inst.Parent and inst.Enabled ~= nil then
+            pcall(function() inst.Enabled = data.Enabled end)
+        end
+    end
+
+    for inst, data in pairs(FpsBooster._cache.Decals) do
+        if typeof(inst) == "Instance" and inst.Parent then
+            pcall(function() inst.Transparency = data.Transparency end)
+        end
+    end
+
+    for inst, data in pairs(FpsBooster._cache.Parts) do
+        if typeof(inst) == "Instance" and inst.Parent and inst:IsA("BasePart") then
+            pcall(function()
+                inst.Material = data.Material
+                inst.CastShadow = data.CastShadow
+                inst.Reflectance = data.Reflectance
+                inst.Color = data.Color
+            end)
+        end
+    end
+end
+
+-- Call this from 9X Totem: disables FPS Booster listener temporarily
+function FpsBooster.Pause()
+    if FpsBooster._conn then
+        FpsBooster._conn:Disconnect()
+        FpsBooster._conn = nil
+        FpsBooster._shouldReconnect = true
+    end
+end
+
+function FpsBooster.Resume(ctx)
+    if FpsBooster._shouldReconnect and FpsBooster._enabled then
+        FpsBooster._shouldReconnect = false
+        FpsBooster._conn = workspace.DescendantAdded:Connect(function(inst)
+            if not FpsBooster._enabled then return end
+            applyToInstance(inst)
+        end)
+    end
+end
+
+function FpsBooster.SetEnabled(ctx, enabled)
+    enabled = enabled and true or false
+    ctx.Config.FpsBooster = enabled
+    FpsBooster._enabled = enabled
+
+    if enabled then
+        applyAll(ctx)
+        ctx.Notify("success", "Fps Booster", "Enabled (world only).", 4)
+    else
+        restoreAll(ctx)
+        ctx.Notify("info", "Fps Booster", "Disabled (restored cached).", 4)
+    end
+end
+
+return FpsBooster
