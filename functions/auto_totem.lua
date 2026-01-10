@@ -40,6 +40,7 @@ local function getTotemUUIDs(ctx, totemId)
             uuids[#uuids+1] = uuid
         end
     end
+    print("[AutoTotem] getTotemUUIDs for Id", totemId, "->", #uuids, "found:", table.concat(uuids, ", "))
     return uuids
 end
 
@@ -90,8 +91,9 @@ function AutoTotem.Start(ctx, totemId, distance)
         if not AutoTotem._running then break end
         local pos = center + offsets[i]
         hrp.CFrame = CFrame.new(pos)
+        print("[AutoTotem] SPAWN TOTEM:", uuids[i], type(uuids[i]))
         pcall(function()
-            ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i]) -- <--- UUID, bukan Id!
+            ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i]) -- UUID string!
         end)
         task.wait(0.3)
     end
@@ -100,7 +102,6 @@ function AutoTotem.Start(ctx, totemId, distance)
     ctx.Notify("success", "9X Totem", "Totem spawn selesai.", 4)
     AutoTotem._running = false
 
-    -- Resume FPS Booster
     if ctx.modules and ctx.modules.fps_booster and ctx.modules.fps_booster.Resume then
         ctx.modules.fps_booster.Resume(ctx)
     end
