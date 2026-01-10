@@ -91,7 +91,7 @@ function AutoTotem.Start(ctx, totemId, distance)
         local pos = center + offsets[i]
         hrp.CFrame = CFrame.new(pos)
         pcall(function()
-            ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i])
+            ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i]) -- <--- UUID, bukan Id!
         end)
         task.wait(0.3)
     end
