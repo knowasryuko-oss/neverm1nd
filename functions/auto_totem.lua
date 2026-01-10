@@ -1,5 +1,5 @@
 -- /functions/auto_totem.lua
--- Auto 9X Totem spawn (rute, offset 120, BodyPosition agar player stay di offset, NoClip+PlatformStand ON, idle 3 detik).
+-- Auto 9X Totem spawn (rute serong/atas/bawah, offset 120, BodyPosition+BodyGyro agar player stay tegak di offset, NoClip+PlatformStand ON, idle 3 detik).
 
 local AutoTotem = {}
 
@@ -42,7 +42,7 @@ local function getTotemUUIDs(ctx, totemId)
     return uuids
 end
 
--- Rute: serong kiri depan, serong kiri belakang, serong kanan belakang, ke atas 3x, ke bawah 3x
+-- Rute: serong kiri depan, serong kiri belakang, serong kanan belakang, ke atas 3x, ke bawah 3x (tanpa pusat)
 local function getOffsets(distance)
     distance = tonumber(distance) or 120
     return {
@@ -76,14 +76,22 @@ local function setNoClip(ctx, state)
     end
 end
 
-local function setBodyPosition(hrp, pos)
+local function setBodyPositionAndGyro(hrp, pos)
     local bp = Instance.new("BodyPosition")
     bp.MaxForce = Vector3.new(1e9, 1e9, 1e9)
     bp.Position = pos
     bp.P = 1e5
     bp.D = 1e3
     bp.Parent = hrp
-    return bp
+
+    local bg = Instance.new("BodyGyro")
+    bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+    bg.CFrame = CFrame.new(pos)
+    bg.P = 1e5
+    bg.D = 1e3
+    bg.Parent = hrp
+
+    return bp, bg
 end
 
 function AutoTotem.Start(ctx, totemId, _distance)
@@ -119,14 +127,15 @@ function AutoTotem.Start(ctx, totemId, _distance)
     for i = 1, n do
         if not AutoTotem._running then break end
         local pos = center + offsets[i]
-        local bp = setBodyPosition(hrp, pos)
-        task.wait(0.2) -- biar player benar-benar stay
+        local bp, bg = setBodyPositionAndGyro(hrp, pos)
+        task.wait(0.2)
         print("[AutoTotem] SPAWN TOTEM:", uuids[i], type(uuids[i]))
         pcall(function()
             ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i])
         end)
-        task.wait(3) -- idle 3 detik di offset
+        task.wait(3)
         bp:Destroy()
+        bg:Destroy()
     end
 
     hrp.CFrame = CFrame.new(center)
