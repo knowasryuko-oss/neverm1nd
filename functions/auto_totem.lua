@@ -1,52 +1,114 @@
--- /ui/automation.lua
--- Automation tab UI (9X Totem, offset fix 90, tidak ada input manual).
+-- /functions/auto_totem.lua
+-- Auto 9X Totem spawn (cross pattern, teleport player, idle 3 detik di offset, restore pos).
 
-return function(ctx, modules, tab)
-    local AutoTotem = modules.auto_totem
+local AutoTotem = {}
 
-    local sec = tab:Section({ Side = "Left", Collapsed = false })
-    sec:Header({ Text = "9X Totem" })
+AutoTotem._running = false
 
-    -- Dropdown totem name (label=Name, value=Id)
-    local totemList = AutoTotem.GetTotemList()
-    local nameToId = {}
-    local nameList = {}
-    for _, v in ipairs(totemList) do
-        nameToId[v.label] = v.value
-        nameList[#nameList+1] = v.label
-    end
-    local selectedTotemName = nameList[1] or ""
-    local selectedTotemId = nameToId[selectedTotemName]
-    local offset = 90
+function AutoTotem.Init(ctx)
+    AutoTotem._running = false
+end
 
-    sec:Dropdown({
-        Name = "Totem Name",
-        Search = true,
-        Multi = false,
-        Required = true,
-        Options = nameList,
-        Default = selectedTotemName,
-        Callback = function(name)
-            selectedTotemName = name
-            selectedTotemId = nameToId[name]
-        end
-    })
-
-    sec:Toggle({
-        Name = "Enable 9X Totem",
-        Default = false,
-        Callback = function(v)
-            if v then
-                if AutoTotem and AutoTotem.Start and selectedTotemId then
-                    AutoTotem.Start(ctx, selectedTotemId, offset)
-                    ctx.Notify("info", "9X Totem", "Auto spawn totem aktif.", 3)
-                end
-            else
-                if AutoTotem and AutoTotem.Stop then
-                    AutoTotem.Stop(ctx)
-                    ctx.Notify("info", "9X Totem", "Auto spawn totem dimatikan.", 3)
+function AutoTotem.GetTotemList()
+    local totemFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Totems")
+    local list = {}
+    if totemFolder then
+        for _, mod in ipairs(totemFolder:GetChildren()) do
+            if mod:IsA("ModuleScript") then
+                local ok, data = pcall(function() return require(mod) end)
+                if ok and type(data) == "table" and data.Data and data.Data.Name and data.Data.Id then
+                    list[#list+1] = { label = data.Data.Name, value = data.Data.Id }
                 end
             end
         end
-    }, "AutoTotemToggle")
+    end
+    table.sort(list, function(a, b) return tostring(a.label) < tostring(b.label) end)
+    return list
 end
+
+local function getTotemUUIDs(ctx, totemId)
+    local dataRep = ctx.Replion.Client:WaitReplion("Data")
+    if not dataRep then return {} end
+    local inv = dataRep:Get("Inventory")
+    local totems = inv and inv["Totems"]
+    if type(totems) ~= "table" then return {} end
+    local uuids = {}
+    for _, item in ipairs(totems) do
+        if item and tonumber(item.Id) == tonumber(totemId) and type(item.UUID) == "string" then
+            uuids[#uuids+1] = item.UUID
+        end
+    end
+    print("[AutoTotem] getTotemUUIDs for Id", totemId, "->", #uuids, "found:", table.concat(uuids, ", "))
+    return uuids
+end
+
+local function getOffsets(distance)
+    distance = tonumber(distance) or 90
+    return {
+        Vector3.new(0, 0, 0),
+        Vector3.new(distance, 0, 0),
+        Vector3.new(-distance, 0, 0),
+        Vector3.new(0, 0, distance),
+        Vector3.new(0, 0, -distance),
+        Vector3.new(0, distance, 0),
+        Vector3.new(0, -distance, 0),
+        Vector3.new(distance, 0, distance),
+        Vector3.new(-distance, 0, -distance),
+    }
+end
+
+function AutoTotem.Start(ctx, totemId, distance)
+    print("[AutoTotem] Start called", totemId, distance)
+    if AutoTotem._running then return end
+    AutoTotem._running = true
+
+    local uuids = getTotemUUIDs(ctx, totemId)
+    if #uuids == 0 then
+        ctx.Notify("warning", "9X Totem", "Tidak ada UUID totem di inventory.", 4)
+        AutoTotem._running = false
+        return
+    end
+
+    local hrp = ctx.LocalPlayer.Character and ctx.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then
+        ctx.Notify("warning", "9X Totem", "Tidak bisa ambil posisi player.", 4)
+        AutoTotem._running = false
+        return
+    end
+
+    local center = hrp.Position
+    local offsets = getOffsets(distance)
+    local n = math.min(9, #uuids, #offsets)
+
+    -- Pause FPS Booster to avoid re-entrancy
+    if ctx.modules and ctx.modules.fps_booster and ctx.modules.fps_booster.Pause then
+        ctx.modules.fps_booster.Pause()
+    end
+
+    for i = 1, n do
+        if not AutoTotem._running then break end
+        local pos = center + offsets[i]
+        hrp.CFrame = CFrame.new(pos)
+        print("[AutoTotem] SPAWN TOTEM:", uuids[i], type(uuids[i]))
+        pcall(function()
+            ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i])
+        end)
+        -- Player idle di offset selama 3 detik
+        task.wait(3)
+    end
+
+    hrp.CFrame = CFrame.new(center)
+    ctx.Notify("success", "9X Totem", "Totem spawn selesai.", 4)
+    AutoTotem._running = false
+
+    if ctx.modules and ctx.modules.fps_booster and ctx.modules.fps_booster.Resume then
+        ctx.modules.fps_booster.Resume(ctx)
+    end
+end
+
+function AutoTotem.Stop(ctx)
+    print("[AutoTotem] Stop called")
+    AutoTotem._running = false
+end
+
+return AutoTotem
