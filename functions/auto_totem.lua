@@ -1,5 +1,5 @@
 -- /functions/auto_totem.lua
--- Auto 9X Totem spawn (offset mirror, tanpa pusat, Anchored+NoClip+PlatformStand ON, idle 3 detik).
+-- Auto 9X Totem spawn (array posisi absolut, idle 4 detik, NoClip+PlatformStand+Anchored ON).
 
 local AutoTotem = {}
 
@@ -42,17 +42,18 @@ local function getTotemUUIDs(ctx, totemId)
     return uuids
 end
 
--- Offset mirror dari script lain (tanpa pusat)
-local function getOffsets()
+-- Array posisi absolut (mirror script lain)
+local function getPositions()
     return {
-        Vector3.new(100.6, 0, -8.29),
-        Vector3.new(39.59, 0.69, -94.14),
-        Vector3.new(0, 101, 0),
-        Vector3.new(100.6, 101, -8.29),
-        Vector3.new(39.59, 101.69, -94.14),
-        Vector3.new(0, -101, 0),
-        Vector3.new(100.6, -101, -8.29),
-        Vector3.new(39.59, -101.3, -94.14),
+        Vector3.new(-2188.89, 53.49, 3671.06),
+        Vector3.new(95.35161590576172, 53.49, 2850.99560546875),
+        Vector3.new(34.34161376953125, 10.573726654052734, 2765.1455078125),
+        Vector3.new(-2188.89, 154.49, 3671.06),
+        Vector3.new(95.35161590576172, 154.49, 2850.99560546875),
+        Vector3.new(34.34161376953125, 111.57373046875, 2765.1455078125),
+        Vector3.new(-2188.89, -47.51, 3671.06),
+        Vector3.new(95.35161590576172, -91.11627197265625, 2850.99560546875),
+        Vector3.new(34.34161376953125, -91.41627502441406, 2765.1455078125),
     }
 end
 
@@ -99,9 +100,9 @@ function AutoTotem.Start(ctx, totemId, _distance)
         return
     end
 
-    local center = hrp.Position
-    local offsets = getOffsets()
-    local n = math.min(8, #uuids, #offsets) -- 8 offset (tanpa pusat)
+    local posOn = hrp.Position
+    local positions = getPositions()
+    local n = math.min(9, #uuids, #positions)
 
     setNoClip(ctx, true)
     setPlatformStand(ctx, true)
@@ -112,18 +113,18 @@ function AutoTotem.Start(ctx, totemId, _distance)
 
     for i = 1, n do
         if not AutoTotem._running then break end
-        local pos = center + offsets[i]
+        local pos = positions[i]
         hrp.CFrame = CFrame.new(pos)
         setAnchored(hrp, true)
-        print("[AutoTotem] SPAWN TOTEM:", uuids[i], type(uuids[i]))
+        print("[AutoTotem] SPAWN TOTEM:", uuids[i], type(uuids[i]), "at", pos)
         pcall(function()
             ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i])
         end)
-        task.wait(3)
+        task.wait(4)
         setAnchored(hrp, false)
     end
 
-    hrp.CFrame = CFrame.new(center)
+    hrp.CFrame = CFrame.new(posOn)
     setNoClip(ctx, false)
     setPlatformStand(ctx, false)
     ctx.Notify("success", "9X Totem", "Totem spawn selesai.", 4)
