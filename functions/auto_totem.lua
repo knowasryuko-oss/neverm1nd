@@ -1,5 +1,7 @@
 -- /functions/auto_totem.lua
--- Auto 9X Totem spawn (array posisi absolut, tanpa pusat, NoClip+PlatformStand+Anchored ON, idle 3 detik).
+-- Auto 9X Totem spawn (mirror script lain: array posisi absolut, tween ke offset, wait totem muncul, idle 4 detik).
+
+local TweenService = game:GetService("TweenService")
 
 local AutoTotem = {}
 
@@ -80,6 +82,32 @@ local function setAnchored(hrp, state)
     end
 end
 
+local function tweenTo(hrp, pos, time)
+    local tween = TweenService:Create(hrp, TweenInfo.new(time or 1, Enum.EasingStyle.Linear), {Position = pos})
+    tween:Play()
+    tween.Completed:Wait()
+end
+
+local function waitTotemPlaced(ctx, lastTotemCount)
+    -- Cek jumlah totem di workspace, tunggu sampai bertambah
+    local totemFolder = workspace:FindFirstChild("Totems") or workspace:FindFirstChild("Totem") or workspace
+    local timeout = 6
+    local t0 = tick()
+    while tick() - t0 < timeout do
+        local count = 0
+        for _, obj in ipairs(totemFolder:GetChildren()) do
+            if obj.Name:lower():find("totem") then
+                count = count + 1
+            end
+        end
+        if count > lastTotemCount then
+            return true
+        end
+        task.wait(0.2)
+    end
+    return false
+end
+
 function AutoTotem.Start(ctx, totemId, _distance)
     print("[AutoTotem] Start called", totemId)
     if AutoTotem._running then return end
@@ -113,13 +141,21 @@ function AutoTotem.Start(ctx, totemId, _distance)
     for i = 1, n do
         if not AutoTotem._running then break end
         local pos = positions[i]
-        hrp.CFrame = CFrame.new(pos)
+        -- Tween ke posisi offset (melayang, bukan teleport)
+        tweenTo(hrp, pos, 1.2)
         setAnchored(hrp, true)
         print("[AutoTotem] SPAWN TOTEM:", uuids[i], type(uuids[i]), "at", pos)
+        -- Hitung jumlah totem sebelum spawn
+        local totemFolder = workspace:FindFirstChild("Totems") or workspace
+        local lastTotemCount = #totemFolder:GetChildren()
         pcall(function()
             ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i])
         end)
-        task.wait(4)
+        -- Tunggu sampai totem benar-benar muncul, atau fallback 4 detik
+        local placed = waitTotemPlaced(ctx, lastTotemCount)
+        if not placed then
+            task.wait(4)
+        end
         setAnchored(hrp, false)
     end
 
