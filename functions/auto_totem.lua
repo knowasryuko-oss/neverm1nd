@@ -1,5 +1,5 @@
 -- /functions/auto_totem.lua
--- Auto 9X Totem spawn (array posisi absolut, idle 4 detik, NoClip+PlatformStand+Anchored ON).
+-- Auto 9X Totem spawn (array posisi absolut, tanpa pusat, NoClip+PlatformStand+Anchored ON, idle 3 detik).
 
 local AutoTotem = {}
 
@@ -42,10 +42,9 @@ local function getTotemUUIDs(ctx, totemId)
     return uuids
 end
 
--- Array posisi absolut (mirror script lain)
+-- Array posisi absolut dari script lain (tanpa pusat)
 local function getPositions()
     return {
-        Vector3.new(-2188.89, 53.49, 3671.06),
         Vector3.new(95.35161590576172, 53.49, 2850.99560546875),
         Vector3.new(34.34161376953125, 10.573726654052734, 2765.1455078125),
         Vector3.new(-2188.89, 154.49, 3671.06),
@@ -102,7 +101,7 @@ function AutoTotem.Start(ctx, totemId, _distance)
 
     local posOn = hrp.Position
     local positions = getPositions()
-    local n = math.min(9, #uuids, #positions)
+    local n = math.min(8, #uuids, #positions) -- 8 posisi (tanpa pusat)
 
     setNoClip(ctx, true)
     setPlatformStand(ctx, true)
