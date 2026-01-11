@@ -1,7 +1,5 @@
 -- /functions/auto_totem.lua
--- Auto 9X Totem spawn (mirror script lain: array posisi absolut, tween ke offset, wait totem muncul, idle 4 detik).
-
-local TweenService = game:GetService("TweenService")
+-- Auto 9X Totem spawn (offset mirror script lain, idle 3 detik, NoClip+PlatformStand+Anchored ON, restore ke saved_location).
 
 local AutoTotem = {}
 
@@ -44,19 +42,18 @@ local function getTotemUUIDs(ctx, totemId)
     return uuids
 end
 
--- Array posisi absolut dari script lain (tanpa pusat)
-local function getPositions()
-    return {
-        Vector3.new(95.35161590576172, 53.49, 2850.99560546875),
-        Vector3.new(34.34161376953125, 10.573726654052734, 2765.1455078125),
-        Vector3.new(-2188.89, 154.49, 3671.06),
-        Vector3.new(95.35161590576172, 154.49, 2850.99560546875),
-        Vector3.new(34.34161376953125, 111.57373046875, 2765.1455078125),
-        Vector3.new(-2188.89, -47.51, 3671.06),
-        Vector3.new(95.35161590576172, -91.11627197265625, 2850.99560546875),
-        Vector3.new(34.34161376953125, -91.41627502441406, 2765.1455078125),
-    }
-end
+-- Array offset hasil konversi dari posisi absolut (tanpa pusat)
+local offsets = {
+    Vector3.new(-48.89, -0.01, 46.06),      -- Totem 1
+    Vector3.new(51.71, -0.01, 37.78),       -- Totem 2
+    Vector3.new(-9.30, 0.69, -48.07),       -- Totem 3
+    Vector3.new(-48.89, 100.99, 46.06),     -- Totem 4
+    Vector3.new(51.71, 100.99, 37.78),      -- Totem 5
+    Vector3.new(-9.30, 101.69, -48.07),     -- Totem 6
+    Vector3.new(-48.89, 94.95, 46.06),      -- Totem 7
+    Vector3.new(51.71, -102.01, 37.78),     -- Totem 8
+    Vector3.new(-9.30, -103.31, -48.07),    -- Totem 9
+}
 
 local function setPlatformStand(ctx, state)
     local char = ctx.LocalPlayer.Character
@@ -82,32 +79,6 @@ local function setAnchored(hrp, state)
     end
 end
 
-local function tweenTo(hrp, pos, time)
-    local tween = TweenService:Create(hrp, TweenInfo.new(time or 1, Enum.EasingStyle.Linear), {Position = pos})
-    tween:Play()
-    tween.Completed:Wait()
-end
-
-local function waitTotemPlaced(ctx, lastTotemCount)
-    -- Cek jumlah totem di workspace, tunggu sampai bertambah
-    local totemFolder = workspace:FindFirstChild("Totems") or workspace:FindFirstChild("Totem") or workspace
-    local timeout = 6
-    local t0 = tick()
-    while tick() - t0 < timeout do
-        local count = 0
-        for _, obj in ipairs(totemFolder:GetChildren()) do
-            if obj.Name:lower():find("totem") then
-                count = count + 1
-            end
-        end
-        if count > lastTotemCount then
-            return true
-        end
-        task.wait(0.2)
-    end
-    return false
-end
-
 function AutoTotem.Start(ctx, totemId, _distance)
     print("[AutoTotem] Start called", totemId)
     if AutoTotem._running then return end
@@ -127,9 +98,8 @@ function AutoTotem.Start(ctx, totemId, _distance)
         return
     end
 
-    local posOn = hrp.Position
-    local positions = getPositions()
-    local n = math.min(8, #uuids, #positions) -- 8 posisi (tanpa pusat)
+    local saved_location = hrp.Position
+    local n = math.min(9, #uuids, #offsets)
 
     setNoClip(ctx, true)
     setPlatformStand(ctx, true)
@@ -140,26 +110,18 @@ function AutoTotem.Start(ctx, totemId, _distance)
 
     for i = 1, n do
         if not AutoTotem._running then break end
-        local pos = positions[i]
-        -- Tween ke posisi offset (melayang, bukan teleport)
-        tweenTo(hrp, pos, 1.2)
+        local pos = saved_location + offsets[i]
+        hrp.CFrame = CFrame.new(pos)
         setAnchored(hrp, true)
         print("[AutoTotem] SPAWN TOTEM:", uuids[i], type(uuids[i]), "at", pos)
-        -- Hitung jumlah totem sebelum spawn
-        local totemFolder = workspace:FindFirstChild("Totems") or workspace
-        local lastTotemCount = #totemFolder:GetChildren()
         pcall(function()
             ctx.net:WaitForChild("RE/SpawnTotem"):FireServer(uuids[i])
         end)
-        -- Tunggu sampai totem benar-benar muncul, atau fallback 4 detik
-        local placed = waitTotemPlaced(ctx, lastTotemCount)
-        if not placed then
-            task.wait(4)
-        end
+        task.wait(3)
         setAnchored(hrp, false)
     end
 
-    hrp.CFrame = CFrame.new(posOn)
+    hrp.CFrame = CFrame.new(saved_location)
     setNoClip(ctx, false)
     setPlatformStand(ctx, false)
     ctx.Notify("success", "9X Totem", "Totem spawn selesai.", 4)
