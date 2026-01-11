@@ -1,5 +1,5 @@
 -- /functions/auto_totem.lua
--- Auto 9X Totem spawn (offset mirror script lain, idle 3 detik, NoClip+PlatformStand+Anchored ON, restore ke saved_location).
+-- Auto 9X Totem spawn (offset mirror, tanpa pusat, NoClip+PlatformStand+Anchored ON, idle 3 detik, restore ke saved_location).
 
 local AutoTotem = {}
 
