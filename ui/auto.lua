@@ -1,5 +1,5 @@
 -- /ui/auto.lua
--- UPDATED AGAIN: adds "No Fishing Animations" toggle (uses modules.no_anims)
+-- Auto Fishing tab UI (Blatant + Auto Sell + Standard + Hide VFX).
 
 return function(ctx, modules, tab)
     local AutoFishing = modules.auto_fishing
@@ -8,6 +8,7 @@ return function(ctx, modules, tab)
     local Cutscene = modules.cutscene
     local HidePopup = modules.hide_popup
     local NoAnims = modules.no_anims
+    local HideVFX = modules.hide_vfx
 
     -- Blatant
     local secBlatant = tab:Section({ Side = "Left", Collapsed = false })
@@ -144,4 +145,16 @@ return function(ctx, modules, tab)
             end
         end
     }, "HideFishPopup")
+
+    -- Tambahan: Hide VFX
+    secStd:Toggle({
+        Name = "Hide VFX",
+        Default = false,
+        Callback = function(v)
+            if HideVFX and HideVFX.SetEnabled then
+                HideVFX.SetEnabled(ctx, v)
+                ctx.Notify("info", "Standard", v and "VFX hidden." or "VFX visible.", 3)
+            end
+        end
+    }, "HideVFX")
 end
