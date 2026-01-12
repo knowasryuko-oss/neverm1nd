@@ -33,11 +33,10 @@ local modules = {
     cutscene     = requireHttp("functions/cutscene.lua"),
     hide_popup   = requireHttp("functions/hide_popup.lua"),
     no_anims     = requireHttp("functions/no_anims.lua"),
-    auto_totem   = requireHttp("functions/auto_totem.lua"),
-    hide_vfx     = requireHttp("functions/hide_vfx.lua"),
+    -- auto_totem   = requireHttp("functions/auto_totem.lua"), -- PATCH: dinonaktifkan
 }
 
-ctx.modules = modules  -- <--- penting! agar modul bisa saling akses
+ctx.modules = modules
 
 -- Init modules (optional)
 for name, mod in pairs(modules) do
@@ -55,11 +54,13 @@ end
 local uiInit = requireHttp("ui/init.lua")
 uiInit(ctx, modules)
 
--- Tambahkan tab baru Automation di UI
+-- PATCH: Jangan panggil tab Automation/9X Totem
+--[[
 do
     local tabGroup = ctx.State.MainWindow:TabGroup()
     local automationTab = tabGroup:Tab({ Name = "Automation", Image = "zap" })
     ctx.RequireHttp("ui/automation.lua")(ctx, modules, automationTab)
 end
+]]
 
 return true
