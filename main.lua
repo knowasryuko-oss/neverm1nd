@@ -33,8 +33,8 @@ local modules = {
     cutscene     = requireHttp("functions/cutscene.lua"),
     hide_popup   = requireHttp("functions/hide_popup.lua"),
     no_anims     = requireHttp("functions/no_anims.lua"),
-    -- Tambahkan module baru untuk Automation
     auto_totem   = requireHttp("functions/auto_totem.lua"),
+    hide_vfx     = requireHttp("functions/hide_vfx.lua"),
 }
 
 ctx.modules = modules  -- <--- penting! agar modul bisa saling akses
