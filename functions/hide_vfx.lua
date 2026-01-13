@@ -1,12 +1,13 @@
 -- /functions/hide_vfx.lua
 -- Hide all rod VFX (ParticleEmitter, Trail, Beam, Light, MeshPart/Part Transparency)
--- in !!!EQUIPPED_TOOL!!! and all VFX/Effect folders in workspace.
+-- and disable all rod animations in AnimationsModule.
 
 local HideVFX = {}
 
 HideVFX._enabled = false
 HideVFX._conns = {}
 HideVFX._cache = {}
+HideVFX._animCache = {}
 
 local function disableVFX(inst)
     if not inst then return end
@@ -62,6 +63,24 @@ local function getAllVFXFolders()
     return folders
 end
 
+-- Disable all rod animations in AnimationsModule
+local function disableRodAnims(ctx, state)
+    local anims = ctx.AnimationsModule
+    if type(anims) ~= "table" then return end
+    for name, data in pairs(anims) do
+        if type(data) == "table" and (
+            name:find("RodThrow") or name:find("FishCaught") or name:find("ReelingIdle")
+            or name:find("ReelStart") or name:find("ReelIntermission") or name:find("StartRodCharge")
+            or name:find("LoopedRodCharge") or name:find("EquipIdle") or name:find("Failure")
+        ) then
+            if HideVFX._animCache[name] == nil then
+                HideVFX._animCache[name] = data.Disabled or false
+            end
+            data.Disabled = state and true or HideVFX._animCache[name]
+        end
+    end
+end
+
 function HideVFX.SetEnabled(ctx, enabled)
     enabled = enabled and true or false
     HideVFX._enabled = enabled
@@ -74,6 +93,7 @@ function HideVFX.SetEnabled(ctx, enabled)
 
     if not enabled then
         restoreVFX()
+        disableRodAnims(ctx, false)
         return
     end
 
@@ -88,7 +108,7 @@ function HideVFX.SetEnabled(ctx, enabled)
         end))
     end
 
-    -- Listen for new VFX/Effect folders in workspace
+    -- Hide future VFX/Effect folders in workspace
     table.insert(HideVFX._conns, workspace.ChildAdded:Connect(function(obj)
         if not HideVFX._enabled then return end
         local name = obj.Name:lower()
@@ -100,6 +120,9 @@ function HideVFX.SetEnabled(ctx, enabled)
             end))
         end
     end))
+
+    -- Disable all rod animations
+    disableRodAnims(ctx, true)
 end
 
 return HideVFX
