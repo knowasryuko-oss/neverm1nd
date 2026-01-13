@@ -1,19 +1,12 @@
 -- /functions/hide_vfx.lua
--- Hide all rod VFX (VFX clone + skin rod in !!!EQUIPPED_TOOL!!!) by disabling ParticleEmitter, Trail, Beam, Light.
+-- Hide all rod VFX (ParticleEmitter, Trail, Beam, Light, MeshPart/Part Transparency)
+-- in !!!EQUIPPED_TOOL!!! and all VFX/Effect folders in workspace.
 
 local HideVFX = {}
 
 HideVFX._enabled = false
-HideVFX._conn = nil
-HideVFX._toolConn = nil
+HideVFX._conns = {}
 HideVFX._cache = {}
-
-local function isVFXClone(inst)
-    local vfxFolder = game:GetService("ReplicatedStorage"):FindFirstChild("VFX")
-    if not vfxFolder then return false end
-    if not inst or not inst.Name then return false end
-    return vfxFolder:FindFirstChild(inst.Name) ~= nil
-end
 
 local function disableVFX(inst)
     if not inst then return end
@@ -24,75 +17,89 @@ local function disableVFX(inst)
                 HideVFX._cache[d] = d.Enabled
             end
             d.Enabled = false
+        elseif d:IsA("MeshPart") or d:IsA("Part") or d:IsA("UnionOperation") then
+            if HideVFX._cache[d] == nil then
+                HideVFX._cache[d] = d.Transparency
+            end
+            d.Transparency = 1
         end
     end
 end
 
 local function restoreVFX()
-    for d, enabled in pairs(HideVFX._cache) do
-        if typeof(d) == "Instance" and d.Parent and d.Enabled ~= nil then
-            d.Enabled = enabled
+    for d, v in pairs(HideVFX._cache) do
+        if typeof(d) == "Instance" and d.Parent then
+            if d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam")
+            or d:IsA("PointLight") or d:IsA("SpotLight") or d:IsA("SurfaceLight") then
+                d.Enabled = v
+            elseif d:IsA("MeshPart") or d:IsA("Part") or d:IsA("UnionOperation") then
+                d.Transparency = v
+            end
         end
     end
     HideVFX._cache = {}
 end
 
-local function getEquippedTool()
+local function getAllVFXFolders()
+    local folders = {}
+    -- Tool
     local charFolder = workspace:FindFirstChild("Characters")
     local char = charFolder and charFolder:FindFirstChild(game.Players.LocalPlayer.Name)
     if not char then char = game.Players.LocalPlayer.Character end
-    if not char then return nil end
-    return char:FindFirstChild("!!!EQUIPPED_TOOL!!!")
+    if char then
+        local tool = char:FindFirstChild("!!!EQUIPPED_TOOL!!!")
+        if tool then
+            folders[#folders+1] = tool
+        end
+    end
+    -- Workspace VFX/Effect folders
+    for _, obj in ipairs(workspace:GetChildren()) do
+        local name = obj.Name:lower()
+        if name:find("vfx") or name:find("effect") then
+            folders[#folders+1] = obj
+        end
+    end
+    return folders
 end
 
 function HideVFX.SetEnabled(ctx, enabled)
     enabled = enabled and true or false
     HideVFX._enabled = enabled
 
-    if HideVFX._conn then
-        HideVFX._conn:Disconnect()
-        HideVFX._conn = nil
+    -- Disconnect all listeners
+    for _, conn in ipairs(HideVFX._conns) do
+        if conn then pcall(function() conn:Disconnect() end) end
     end
-    if HideVFX._toolConn then
-        HideVFX._toolConn:Disconnect()
-        HideVFX._toolConn = nil
-    end
+    HideVFX._conns = {}
 
     if not enabled then
         restoreVFX()
         return
     end
 
-    -- Hide all VFX clone in workspace
-    for _, inst in ipairs(workspace:GetDescendants()) do
-        if isVFXClone(inst) then
-            disableVFX(inst)
-        end
-    end
-
-    -- Hide all VFX in equipped tool
-    local tool = getEquippedTool()
-    if tool then
-        disableVFX(tool)
-        HideVFX._toolConn = tool.DescendantAdded:Connect(function(inst)
+    -- Hide all VFX in all folders
+    local folders = getAllVFXFolders()
+    for _, folder in ipairs(folders) do
+        disableVFX(folder)
+        -- Listen for new VFX in each folder
+        table.insert(HideVFX._conns, folder.DescendantAdded:Connect(function(inst)
             if not HideVFX._enabled then return end
-            if inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam")
-            or inst:IsA("PointLight") or inst:IsA("SpotLight") or inst:IsA("SurfaceLight") then
-                if HideVFX._cache[inst] == nil then
-                    HideVFX._cache[inst] = inst.Enabled
-                end
-                inst.Enabled = false
-            end
-        end)
+            disableVFX(inst)
+        end))
     end
 
-    -- Hide future VFX clones in workspace
-    HideVFX._conn = workspace.DescendantAdded:Connect(function(inst)
+    -- Listen for new VFX/Effect folders in workspace
+    table.insert(HideVFX._conns, workspace.ChildAdded:Connect(function(obj)
         if not HideVFX._enabled then return end
-        if isVFXClone(inst) then
-            disableVFX(inst)
+        local name = obj.Name:lower()
+        if name:find("vfx") or name:find("effect") then
+            disableVFX(obj)
+            table.insert(HideVFX._conns, obj.DescendantAdded:Connect(function(inst)
+                if not HideVFX._enabled then return end
+                disableVFX(inst)
+            end))
         end
-    end)
+    end))
 end
 
 return HideVFX
